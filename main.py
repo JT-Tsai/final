@@ -45,8 +45,13 @@ class ClassificationAgent(Agent):
             tokenizer_name = model_name
         
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+        print(f"load tokenizer which name is {tokenizer_name}")
+
+
+        print(f"load model which name is {model_name}")
         if quantization_type == "bf16":
             self.model = AutoModelForCausalLM.from_pretrained(model_name, quantization_type = get_bnb_config(), torch_dtype = torch.bfloat16)
+            print(f"load model using quantization")
         elif quantization_type == "fp16":
             # self.model = None
             pass
@@ -164,7 +169,7 @@ if __name__ == "__main__":
        "device": "cuda",
        "model_name": "Qwen/Qwen2.5-7B-Instruct",
        "seed": 42,
-       
+
     }
     agent = agent_name(config)
     main(agent, bench_cfg)
