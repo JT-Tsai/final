@@ -161,7 +161,10 @@ if __name__ == "__main__":
         'bench_name': args.bench_name
     }
     config = {
-        # TODO: specify your configs for the agent here
+       "device": "cuda",
+       "model_name": "Qwen/Qwen2.5-7B-Instruct",
+       "seed": 42,
+       
     }
     agent = agent_name(config)
     main(agent, bench_cfg)
