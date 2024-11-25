@@ -1,22 +1,76 @@
 from base import Agent
 from execution_pipeline import main
+from transformers import (
+    AutoTokenizer,
+    AutoModelForCausalLM,
+    set_seed,
+    BitsAndBytesConfig,
+)
+from utils import RAG
+import torch
+
+import ipdb
+
+
+def get_bnb_config():
+    """function for model quantization with bf16 setting"""
+    quantization_config = BitsAndBytesConfig(
+        load_in_4bit = True,
+        bnb_4bit_compute_dtype = torch.bfloat16,
+        bnb_4bit_use_double_quant = True,
+        bnb_4bit_quant_type = "n4f",
+    )
+
+    return quantization_config
+
+
 
 class ClassificationAgent(Agent):
     """
     An agent that classifies text into one of the labels in the given label set.
     """
     def __init__(self, config: dict) -> None:
-        """
-        Initialize your LLM here
-        """
-        # TODO
-        raise NotImplementedError
+        """setting agent elements like `device`, `tokenizer`, `model`, `quantization_config`, 
+            `rag_config(utils)`, `prompt_format`, `buffer`"""
+        # device
+        self.device = config.get("device")
+        
+        model_name = config.get("model_name")
+        quantization_type = config.get("quantization_type")
+
+        # tokenizer and model
+        if config.get("tokenizer_name") is not None:
+            tokenizer_name = config.get("tokenizer_name")    
+        else:
+            tokenizer_name = model_name
+        
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+        if quantization_type == "bf16":
+            self.model = AutoModelForCausalLM.from_pretrained(model_name, quantization_type = get_bnb_config(), torch_dtype = torch.bfloat16)
+        elif quantization_type == "fp16":
+            # self.model = None
+            pass
+        else:
+            self.model = AutoModelForCausalLM.from_pretrained(model_name)
+
+        # rag_config
+        self.rag_config = {
+            # I think we need to finetune embedding_model when we select the model to implement.
+            "embedding_model": config.get("embedding_model") \
+                if config.get("embedding_model") is not None else "BAAI/bge-base-en-v1.5",
+            "seed": config.get("seed") if config.get("seed") is not None else 42,
+            "top_k": config.get("top_k") if config.get("top_k") is not None else 5,
+            "order": config.get("order") if config.get("order") is not None else "similar_at_top",
+        }
+
+
 
     def __call__(
         self,
         label2desc: dict[str, str],
         text: str
     ) -> str:
+        ipdb.set_trace()
         """
         Classify the text into one of the labels.
 
