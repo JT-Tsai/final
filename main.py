@@ -12,8 +12,7 @@ import torch
 import re
 import random
 
-
-import ipdb
+# import ipdb
 
 
 
@@ -273,6 +272,8 @@ if __name__ == "__main__":
     parser.add_argument('--seed', type = int, default = 42)
     parser.add_argument('--top_k', type = float, default = 5)
     parser.add_argument('--top_p', type = float, default = 0.75)
+    parser.add_argument('--description', type = str, default = None)
+
 
     args = parser.parse_args()
 
@@ -288,7 +289,7 @@ if __name__ == "__main__":
         'output_path': args.output_path
     }
     config = {
-        "exp_name":f'self_streamicl_{args.bench_name}_{args.model_name}',
+        "exp_name":f'self_streamicl_{args.bench_name}_{args.model_name}_{args.description}',
         "bench_name": args.bench_name,
         "embedding_model": args.embedding_model,
         "model_name": args.model_name,
