@@ -12,7 +12,7 @@ import torch
 import re
 import random
 
-import ipdb
+# import ipdb
 
 
 
@@ -69,7 +69,7 @@ class ClassificationAgent(Agent):
                 device_map = self.device_map
             )
 
-            ipdb.set_trace()
+            # ipdb.set_trace()
             print(f"load model using quantization")
         else:
             weight_type = config.get("weight_type")
@@ -78,7 +78,7 @@ class ClassificationAgent(Agent):
                 # torch_dtype = torch.bfloat16 if type == "bf16" else (torch.float16 if type == "fp16" else torch.float32),
                 device_map = self.device_map,
             )
-            ipdb.set_trace()
+            # ipdb.set_trace()
 
         self.model.eval()
         
