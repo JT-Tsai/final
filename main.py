@@ -40,6 +40,10 @@ class ClassificationAgent(Agent):
         
         # device
         self.device = config.get("device")
+        self.device_map = self.device
+
+        if torch.cuda.device_count() > 1:
+            self.device_map = "auto"
         
         model_name = config.get("model_name")
 
@@ -59,7 +63,7 @@ class ClassificationAgent(Agent):
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_name, 
                 quantization_config = get_bnb_config(), 
-                device_map = self.device
+                device_map = self.device_map
             )
             print(f"load model using quantization")
         else:
@@ -67,13 +71,9 @@ class ClassificationAgent(Agent):
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_name,
                 torch_dtype = torch.bfloat16 if weight_type == "bf16" else torch.float16,
-                # device_map = self.device,
+                device_map = self.device_map,
             )
-        if torch.cuda.device_count() > 1:
-            print(f"Using {torch.cuda.device_count()} GPUs")
-            self.model = torch.nn.DataParallel(self.model, device_ids = list(range(torch.cuda.device_count()))).to(self.device)
-        else:
-            self.model = self.model.to(self.device)
+
         self.model.eval()
         
 
