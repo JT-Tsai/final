@@ -115,8 +115,8 @@ class ClassificationAgent(Agent):
         ]
         
         return self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
-
-    def get_prompt(text, option_text, shots = None):
+    
+    def get_prompt(self, text, option_text, shots = None):
         if shots is None:
             prompt = f""" \
             Act as a professional medical doctor that can diagnose the patient based on the patient profile.
@@ -148,11 +148,11 @@ class ClassificationAgent(Agent):
 
         return strip_all_lines(prompt)
     
-    def get_shot_template(question, answer) -> str:
+    def get_shot_template(self, question, answer) -> str:
         prompt = f"""profile content: {question}, Answer: {answer}"""
         return strip_all_lines(prompt)
-    
-    def extract_label(pred_text: str, label2desc: dict[str, str]) -> str:
+
+    def extract_label(self, pred_text: str, label2desc: dict[str, str]) -> str:
         prediction = re.findall(pattern = r"ID: (\d+)", string = pred_text)
         candidate = [k.replace("ID: ", "") for k in prediction]
         
@@ -188,6 +188,8 @@ class ClassificationAgent(Agent):
             prompt = self.get_prompt(text, option_text, shots)
         else:
             prompt = self.get_prompt(text, option_text)
+
+        ipdb.set_trace()
 
         messages = [
             {"role": "user", "content": prompt}
