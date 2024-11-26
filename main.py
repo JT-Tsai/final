@@ -71,7 +71,7 @@ class ClassificationAgent(Agent):
             )
         if torch.cuda.device_count() > 1:
             print(f"Using {torch.cuda.device_count()} GPUs")
-            self.model = torch.nn.DataParallel(self.model, device = list(range(torch.cuda.device_count()))).to(self.device)
+            self.model = torch.nn.DataParallel(self.model, device_ids = list(range(torch.cuda.device_count()))).to(self.device)
         else:
             self.model = self.model.to(self.device)
         self.model.eval()
