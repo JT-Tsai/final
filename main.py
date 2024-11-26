@@ -46,6 +46,13 @@ class ClassificationAgent(Agent):
             self.device_map = "auto"
         
         model_name = config.get("model_name")
+        if config.get("weight_type") == "fp16":
+            weight_type = torch.float16
+        elif config.get("weight_type") == "bf16":
+            weight_type = torch.bfloat16
+        else:
+            weight_type = torch.float32
+        
 
         # tokenizer and model
         if config.get("tokenizer_name") is not None:
@@ -59,10 +66,12 @@ class ClassificationAgent(Agent):
 
         print(f"load model which name is {model_name}")
         
+
         if config.get("use_8bits"):
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_name, 
-                quantization_config = get_bnb_config(), 
+                quantization_config = get_bnb_config(),
+                torch_dtype = weight_type,
                 device_map = self.device_map
             )
             print(f"load model using quantization")
@@ -70,7 +79,7 @@ class ClassificationAgent(Agent):
             weight_type = config.get("weight_type")
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_name,
-                torch_dtype = torch.bfloat16 if weight_type == "bf16" else torch.float16,
+                torch_dtype = weight_type,
                 device_map = self.device_map,
             )
 
