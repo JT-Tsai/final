@@ -173,7 +173,7 @@ class ClassificationAgent(Agent):
         else:
             if len(candidate) > 1:
                 print(Fore.YELLOW + f"Extracted numbers {candidate} is not exactly one. Select the first one." + Style.RESET_ALL)
-                result = id[0]
+                result = candidate[0]
             else:
                 print(Fore.RED + f"Prediction {pred_text} has no extracted numbers. Randomly select one." + Style.RESET_ALL)
                 result = random.choice(list(label2desc.keys()))
