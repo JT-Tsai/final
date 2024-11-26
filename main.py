@@ -59,7 +59,7 @@ class ClassificationAgent(Agent):
         if config.get("use_8bits"):
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_name, 
-                quantization_type = get_bnb_config(), 
+                quantization_config = get_bnb_config(), 
                 device_map = self.device
             )
             print(f"load model using quantization")
