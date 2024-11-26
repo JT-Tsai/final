@@ -270,6 +270,7 @@ if __name__ == "__main__":
         'bench_name': args.bench_name
     }
     config = {
+       "bench_name": args.bench_name,
        "device": "cuda",
        "model_name": "Qwen/Qwen2.5-7B-Instruct",
        "seed": 42,
