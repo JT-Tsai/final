@@ -12,7 +12,7 @@ import torch
 import re
 import random
 
-# import ipdb
+import ipdb
 
 
 
@@ -65,17 +65,20 @@ class ClassificationAgent(Agent):
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_name, 
                 quantization_config = get_bnb_config(),
-                torch_dtype = torch.bfloat16 if type == "bf16" else (torch.float16 if type == "fp16" else torch.float32),
+                # torch_dtype = torch.bfloat16 if type == "bf16" else (torch.float16 if type == "fp16" else torch.float32),
                 device_map = self.device_map
             )
+
+            ipdb.set_trace()
             print(f"load model using quantization")
         else:
             weight_type = config.get("weight_type")
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_name,
-                torch_dtype = torch.bfloat16 if type == "bf16" else (torch.float16 if type == "fp16" else torch.float32),
+                # torch_dtype = torch.bfloat16 if type == "bf16" else (torch.float16 if type == "fp16" else torch.float32),
                 device_map = self.device_map,
             )
+            ipdb.set_trace()
 
         self.model.eval()
         
