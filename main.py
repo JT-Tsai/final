@@ -154,12 +154,12 @@ class ClassificationAgent(Agent):
     
     def extract_label(pred_text: str, label2desc: dict[str, str]) -> str:
         prediction = re.findall(pattern = r"ID: (\d+)", string = pred_text)
-        prediction = [k.replace("ID: ", "") for k in prediction]
+        candidate = [k.replace("ID: ", "") for k in prediction]
         
         result = None
 
-        if len(prediction) == 1:
-            id = prediction[0]
+        if len(candidate) == 1:
+            id = candidate[0]
             if int(id) in label2desc:
                 result = id
             else:
@@ -167,7 +167,7 @@ class ClassificationAgent(Agent):
                 result = random.choice(list(label2desc.keys()))
         else:
             if len(result) > 1:
-                print(Fore.YELLOW + f"Extracted numbers {prediction} is not exactly one. Select the first one." + Style.RESET_ALL)
+                print(Fore.YELLOW + f"Extracted numbers {candidate} is not exactly one. Select the first one." + Style.RESET_ALL)
                 result = id[0]
             else:
                 print(Fore.RED + f"Prediction {pred_text} has no extracted numbers. Randomly select one." + Style.RESET_ALL)
