@@ -8,6 +8,7 @@ import warnings
 from transformers import logging as transformers_logging
 
 from utils import strip_all_lines
+import ipdb
 
 # Ignore warning messages from transformers
 warnings.filterwarnings("ignore")
@@ -104,12 +105,15 @@ class ClassificationAgent(LocalModelAgent):
     ) -> str:
         self.reset_log_info()
         option_text = '\n'.join([f"{str(k)}. {v}" for k, v in label2desc.items()])
+        ipdb.set_trace()
+
         prompt = self.get_zeroshot_prompt(option_text, text)
         messages = [
             {"role": "system", "content": self.get_system_prompt()},
             {"role": "user", "content": prompt}
         ]
         response = self.generate_response(messages)
+        print(response)
         prediction = self.extract_label(response, label2desc)
         self.update_log_info(log_data={
             "input_pred": prompt,
@@ -121,7 +125,7 @@ class ClassificationAgent(LocalModelAgent):
 
     @staticmethod
     def extract_label(pred_text: str, label2desc: dict[str, str]) -> str:
-        print(pred_text)
+        # print(pred_text)
         numbers = re.findall(pattern=r"(\d+)\.", string=pred_text)
         if len(numbers) == 1:
             number = numbers[0]
