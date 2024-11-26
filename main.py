@@ -182,20 +182,20 @@ class ClassificationAgent(Agent):
         text: str
     ) -> str:
         option_text = '\n'.join([f"ID: {str(k)}, {v}" for k, v in label2desc.items()])
-        ipdb.set_trace()
+        # ipdb.set_trace()
         shots = self.rag.retrieve(query = text, top_k = self.rag.top_k) if (self.rag.insert_acc > 0) else []
         if len(shots):
             prompt = self.get_prompt(text, option_text, shots)
         else:
             prompt = self.get_prompt(text, option_text)
 
-        ipdb.set_trace()
+        # ipdb.set_trace()
 
         messages = [
             {"role": "user", "content": prompt}
         ]
         response = self.generate_response(messages)
-        ipdb.set_trace()
+        # ipdb.set_trace()
         prediction = self.extract_label(response, label2desc)
 
         self.update_log_info(log_data={
