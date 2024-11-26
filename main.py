@@ -104,7 +104,9 @@ class ClassificationAgent(Agent):
             generated_ids = self.model.generate(
                 **model_inputs,
                 max_new_tokens = self.max_token,
-                do_sample = False
+                do_sample = True,
+                temperature = 1,
+                top_p = 0.8,
             )
 
         # ignore the input partial, keep the output partial to the result
@@ -191,6 +193,7 @@ class ClassificationAgent(Agent):
             {"role": "user", "content": prompt}
         ]
         response = self.generate_response(messages)
+        ipdb.set_trace()
         prediction = self.extract_label(response, label2desc)
 
         self.update_log_info(log_data={
