@@ -300,4 +300,4 @@ if __name__ == "__main__":
         "top_p": args.top_p,
     }
     agent = agent_name(config)
-    main(agent, bench_cfg, use_wandb=args.use_wandb, wandb_name=config["exp_name"], config=config)
+    main(agent, bench_cfg, use_wandb=args.use_wandb, wandb_name=config["exp_name"], wandb_config=config)
