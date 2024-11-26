@@ -21,8 +21,8 @@ def get_bnb_config():
     """function for model quantization with int8 setting"""
     quantization_config = BitsAndBytesConfig(
         load_in_8bit = True,
-        llm_int8_has_fp16_weight=False
-        # llm_int8_has_fp16_weight=True
+        # llm_int8_has_fp16_weight=False
+        llm_int8_has_fp16_weight=True
     )
 
     return quantization_config
