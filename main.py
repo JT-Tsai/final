@@ -118,33 +118,30 @@ class ClassificationAgent(Agent):
     
     def get_prompt(self, text, option_text, shots = None):
         if shots is None:
-            prompt = f""" \
-            Act as a professional medical doctor that can diagnose the patient based on the patient profile.
-            Provide your diagnosis in the following format: ID: <number>, <diagnosis>
+            prompt = f"""\
+                You are a professional medical doctor. Diagnose the patient based on the provided profile.
 
-            {text}
+                Patient Profile:
+                {text}
 
-            All possible diagnoses for you to choose from are as follows (one diagnosis per line, in the format of ID: <number>, <diagnosis>):
-            {option_text}
+                Possible Diagnoses (select one, in the format ID: <number>, <diagnosis>):
+                {option_text}
 
-            Now, directly provide the diagnosis for the patient use the above format. Don't give me any additional information.""".strip()
+                Provide your diagnosis in this exact format: ID: <number>, <diagnosis>. Do not include any additional information.""".strip()
         else:
             prompt = f"""\
-            Act as a professional medical doctor that can diagnose the patient based on the patient profile.
-            Provide your diagnosis in the following format: ID: <number>, <diagnosis>
-            
-            All possible diagnoses for you to choose from are as follows (one diagnosis per line, in the format of ID: <number>, <diagnosis>):
-            {option_text}
+                You are a professional medical doctor. Diagnose the patient based on the provided profile.
 
-            The following are some cases for reference.
-            
-            {shots}
-            
-            Now it's your turn.
-            
-            {text}
-            
-            Now, directly provide the diagnosis for the patient use the above format. Don't give me any additional information.""".strip()
+                Possible Diagnoses (select one, in the format ID: <number>, <diagnosis>):
+                {option_text}
+
+                Reference Cases for Your Review:
+                {shots}
+
+                Patient Profile:
+                {text}
+
+                Provide your diagnosis in this exact format: ID: <number>, <diagnosis>. Do not include any additional information.""".strip()
 
         return strip_all_lines(prompt)
     
