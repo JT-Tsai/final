@@ -121,6 +121,7 @@ class ClassificationAgent(LocalModelAgent):
 
     @staticmethod
     def extract_label(pred_text: str, label2desc: dict[str, str]) -> str:
+        print(pred_text)
         numbers = re.findall(pattern=r"(\d+)\.", string=pred_text)
         if len(numbers) == 1:
             number = numbers[0]
