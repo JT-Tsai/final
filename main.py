@@ -21,8 +21,8 @@ def get_bnb_config():
     """function for model quantization with int8 setting"""
     quantization_config = BitsAndBytesConfig(
         load_in_8bit = True,
-        llm_int8_has_fp16_weight=False
-        # llm_int8_has_fp16_weight=True
+        # llm_int8_has_fp16_weight=False
+        llm_int8_has_fp16_weight=True
     )
 
     return quantization_config
@@ -43,7 +43,6 @@ class ClassificationAgent(Agent):
         self.device = config.get("device")
         
         model_name = config.get("model_name")
-        quantization_type = config.get("quantization_type")
 
         # tokenizer and model
         if config.get("tokenizer_name") is not None:
@@ -56,7 +55,8 @@ class ClassificationAgent(Agent):
 
 
         print(f"load model which name is {model_name}")
-        if quantization_type == "use_8bit":
+        
+        if config.get("use_8bits"):
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_name, 
                 quantization_type = get_bnb_config(), 
@@ -86,6 +86,7 @@ class ClassificationAgent(Agent):
 
         # gen max token
         self.max_token = config.get("max_token") if config.get("max_token") is not None else 32
+        self.top_p = config.get("top_p")
 
         # save the streaming inputs and outputs for iterative improvement
         self.inputs = list()
@@ -105,8 +106,8 @@ class ClassificationAgent(Agent):
                 **model_inputs,
                 max_new_tokens = self.max_token,
                 do_sample = True,
-                temperature = 1,
-                top_p = 0.8,
+                top_p = self.top_p,
+                temperature = 1.0,
             )
 
         # ignore the input partial, keep the output partial to the result
@@ -262,6 +263,17 @@ if __name__ == "__main__":
 
     parser = ArgumentParser()
     parser.add_argument('--bench_name', type=str, required=True)
+    parser.add_argument('--embedding_model', type=str, default = "BAAI/bge-base-en-v1.5")
+    parser.add_argument('--model_name', type=str, default = "Qwen/Qwen2.5-7B-Instruct")
+    parser.add_argument('--device', type=str, default = "cuda")
+    parser.add_argument('--use_8bits', action = "store_true")
+    parser.add_argument('--weight_type', type = str, default = None)
+    parser.add_argument('--output_path', type=str, default = None)
+    parser.add_argument('--use_wandb', action = "store_true")
+    parser.add_argument('--seed', type = int, default = 42)
+    parser.add_argument('--top_k', type = float, default = 5)
+    parser.add_argument('--top_p', type = float, default = 0.75)
+
     args = parser.parse_args()
 
     if args.bench_name.startswith("classification"):
@@ -272,14 +284,20 @@ if __name__ == "__main__":
         raise ValueError(f"Invalid benchmark name: {args.bench_name}")
 
     bench_cfg = {
-        'bench_name': args.bench_name
+        'bench_name': args.bench_name,
+        'output_path': args.output_path
     }
     config = {
-       "bench_name": args.bench_name,
-       "device": "cuda",
-       "model_name": "Qwen/Qwen2.5-1.5B-Instruct",
-       "seed": 42,
-
+        "exp_name":f'self_streamicl_{args.bench_name}_{args.model_name}',
+        "bench_name": args.bench_name,
+        "embedding_model": args.embedding_model,
+        "model_name": args.model_name,
+        "device": args.device,
+        "use_8bits": args.use_8bits,
+        "weight_type": args.weight_type,
+        "seed": args.seed,
+        "top_k": args.top_k,
+        "top_p": args.top_p,
     }
     agent = agent_name(config)
-    main(agent, bench_cfg)
+    main(agent, bench_cfg, use_wandb=args.use_wandb, wandb_name=config["exp_name"], config=config)
