@@ -50,7 +50,7 @@ class RAG:
 
     def __init__(self, rag_config: dict) -> None:
         self.tokenizer = AutoTokenizer.from_pretrained(rag_config["embedding_model"], trust_remote_code=True)
-        self.embed_model = AutoModel.from_pretrained(rag_config["embedding_model"], trust_remote_code=True).cuda().eval()
+        self.embed_model = AutoModel.from_pretrained(rag_config["embedding_model"], trust_remote_code=True).eval()
         
         self.index = None
         self.id2evidence = dict()
