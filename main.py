@@ -278,7 +278,7 @@ if __name__ == "__main__":
     parser.add_argument('--output_path', type=str, default = None)
     parser.add_argument('--use_wandb', action = "store_true")
     parser.add_argument('--seed', type = int, default = 42)
-    parser.add_argument('--top_k', type = float, default = 5)
+    parser.add_argument('--top_k', type = int, default = 5)
     parser.add_argument('--top_p', type = float, default = 0.75)
     parser.add_argument('--description', type = str, default = None)
 
