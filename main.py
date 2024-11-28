@@ -146,7 +146,7 @@ class ClassificationAgent(Agent):
                 Possible Diagnoses (select one, in the format ID: <number>, <diagnosis>):
                 {option_text}
 
-                Reference Cases for Your Review:
+                Reference Cases for Your Review, determine if the diagnosis is correct using `NOT`:
                 {shots}
 
                 Patient Profile:
@@ -156,8 +156,11 @@ class ClassificationAgent(Agent):
 
         return strip_all_lines(prompt)
     
-    def get_shot_template(self, question, answer) -> str:
-        prompt = f"""profile content: {question}, Answer: {answer}"""
+    def get_shot_template(self, question, answer, flag = True) -> str:
+        if flag:
+            prompt = f"""profile content: {question}, Answer: {answer}"""
+        else:
+            prompt = f"""profile content: {question}, Answer: `NOT` {answer}"""
         return strip_all_lines(prompt)
 
     def extract_label(self, pred_text: str, label2desc: dict[str, str]) -> str:
@@ -219,13 +222,15 @@ class ClassificationAgent(Agent):
         return prediction
 
     def update(self, correctness: bool) -> bool:
+        question = self.inputs[-1]
+        answer = self.model_outputs[-1]
         if correctness:
-            question = self.inputs[-1]
-            answer = self.model_outputs[-1]
             chunk = self.get_shot_template(question, answer)
             self.rag.insert(key = question, value = chunk)
             return True
         else:
+            chunk = self.get_shot_template(question, answer, flag = False)
+            self.rag.insert(key = question, value = chunk)
             return False
 
 class SQLGenerationAgent(Agent):
