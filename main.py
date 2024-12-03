@@ -15,20 +15,22 @@ import random
 # import ipdb
 
 
-def get_bnb_config():
+def get_bnb_config(bits_8 = False, bits_4 = False):
     """8bits Q"""
-    # quantization_config = BitsAndBytesConfig(
-    #     load_in_8bit = True,
-    #     llm_int8_has_fp16_weight=False
-    #     # llm_int8_has_fp16_weight=True
-    # )
-    """4bits Q""" 
-    quantization_config = BitsAndBytesConfig(
-        load_in_4bit=True,
-        bnb_4bit_use_double_quant=False,
-        bnb_4bit_quant_type="n4n",
-        bnb_4bit_compute_dtype="float16",
-    )
+    if bits_8:
+        quantization_config = BitsAndBytesConfig(
+            load_in_8bit = True,
+            llm_int8_has_fp16_weight=False
+            # llm_int8_has_fp16_weight=True
+        )
+    """4bits Q"""
+    if bits_4: 
+        quantization_config = BitsAndBytesConfig(
+            load_in_4bit=True,
+            bnb_4bit_use_double_quant=False,
+            bnb_4bit_quant_type="n4n",
+            bnb_4bit_compute_dtype="float16",
+        )
 
     return quantization_config
 
@@ -72,17 +74,27 @@ class ClassificationAgent(Agent):
         if config.get("use_8bits"):
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_name, 
-                quantization_config = get_bnb_config(),
+                quantization_config = get_bnb_config(bits_8 = True),
+                torch_dtype = torch.float16,
                 # torch_dtype = torch.bfloat16 if type == "bf16" else (torch.float16 if type == "fp16" else torch.float32),
                 device_map = self.device_map
             )
 
             # ipdb.set_trace()
             print(f"load model using quantization")
-        else:
-            weight_type = config.get("weight_type")
+        elif config.get("use_4bits"):
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_name,
+                quantization_config = get_bnb_config(bits_4 = True),
+                torch_dtype = torch.float16,
+                device_map = self.device_map
+            )
+
+            print(f"load model using quantization")
+        else:
+            self.model = AutoModelForCausalLM.from_pretrained(
+                model_name,
+                torch_type = torch.float16,
                 # torch_dtype = torch.bfloat16 if type == "bf16" else (torch.float16 if type == "fp16" else torch.float32),
                 device_map = self.device_map,
             )
@@ -282,6 +294,7 @@ if __name__ == "__main__":
     parser.add_argument('--model_name', type=str, default = "Qwen/Qwen2.5-7B-Instruct")
     parser.add_argument('--device', type=str, default = "cuda")
     parser.add_argument('--use_8bits', action = "store_true")
+    parser.add_argument('--use_4bits', action = "store_true")
     parser.add_argument('--weight_type', type = str, default = None)
     parser.add_argument('--output_path', type=str, default = None)
     parser.add_argument('--use_wandb', action = "store_true")
@@ -311,6 +324,7 @@ if __name__ == "__main__":
         "model_name": args.model_name,
         "device": args.device,
         "use_8bits": args.use_8bits,
+        "use_4bits": args.use_4bits,
         "weight_type": args.weight_type,
         "seed": args.seed,
         "top_k": args.top_k,
