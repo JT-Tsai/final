@@ -15,16 +15,24 @@ import random
 # import ipdb
 
 
-
 def get_bnb_config():
-    """function for model quantization with int8 setting"""
+    """8bits Q"""
+    # quantization_config = BitsAndBytesConfig(
+    #     load_in_8bit = True,
+    #     llm_int8_has_fp16_weight=False
+    #     # llm_int8_has_fp16_weight=True
+    # )
+    """4bits Q""" 
     quantization_config = BitsAndBytesConfig(
-        load_in_8bit = True,
-        llm_int8_has_fp16_weight=False
-        # llm_int8_has_fp16_weight=True
+        load_in_4bit=True,
+        bnb_4bit_use_double_quant=False,
+        bnb_4bit_quant_type="n4n",
+        bnb_4bit_compute_dtype="float16",
     )
 
     return quantization_config
+
+
 
 
 
