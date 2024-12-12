@@ -36,9 +36,6 @@ def get_bnb_config(bits_8 = False, bits_4 = False):
     return quantization_config
 
 
-
-
-
 class ClassificationAgent(Agent):
     """
     An agent that classifies text into one of the labels in the given label set.
@@ -113,8 +110,9 @@ class ClassificationAgent(Agent):
             "top_k": config.get("top_k") if config.get("top_k") is not None else 5,
             "order": config.get("order") if config.get("order") is not None else "similar_at_top",
         }
-        self.rag = RAG(rag_config)
-
+        self.correct_rag = RAG(rag_config)
+        self.wrong_rag = RAG(rag_config)
+ 
         # gen max token
         self.max_token = config.get("max_token") if config.get("max_token") is not None else 32
         self.top_p = config.get("top_p")
@@ -123,7 +121,6 @@ class ClassificationAgent(Agent):
         self.inputs = list()
         self.model_outputs = list()
 
-        self.threshold = 50.0
         
     def generate_response(self, message: list) -> str:
         text_chat = self.tokenizer.apply_chat_template(
@@ -149,30 +146,6 @@ class ClassificationAgent(Agent):
         ]
         
         return self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
-    
-    def calculate_simarility(self, rag_shots, text):
-        prompt = f"""\
-                    You are a professional medical doctor specializing in patient assessment.
-
-                    Evaluate the similarity between the following "Patient Profile" and "Current Profile" on a continuous scale from 0.0 (completely dissimilar) to 100.0 (identical). 
-                    
-                    Provide only the similarity score as the output for each case.
-
-                    Patient Profile:
-                    {rag_shots}
-
-                    Current Profile:
-                    {text}
-                """.strip()
-        
-        prompt = strip_all_lines(prompt)
-        messages = [
-            {"role": "user", "content": prompt}
-        ]
-
-        value = self.generate_response(messages) # similarity
-        
-        return value
     
     def get_prompt(self, text, option_text, shots = None):
         if shots is None:
@@ -204,7 +177,7 @@ class ClassificationAgent(Agent):
         return strip_all_lines(prompt)
     
     def get_shot_template(self, question, answer) -> str:
-        prompt = f"""profile content: {question}, Diagnosis: {answer}"""
+        prompt = f"""profile content: {question}, Answer: {answer}"""
         return strip_all_lines(prompt)
 
     def extract_label(self, pred_text: str, label2desc: dict[str, str]) -> str:
@@ -237,34 +210,26 @@ class ClassificationAgent(Agent):
         text: str
     ) -> str:
         option_text = '\n'.join([f"ID: {str(k)}, {v}" for k, v in label2desc.items()])
-        shots = self.rag.retrieve(query = text, top_k = self.rag.top_k) if (self.rag.insert_acc > 1) else []
+        correct_shots = self.correct_rag.retrieve(query = text, top_k = self.correct_rag.top_k) if (self.correct_rag.insert_acc > 10) else []
+        wrong_shots = self.wrong_rag.retrieve(query = text, top_k = self.wrong_rag.top_k) if (self.wrong_rag.insert_acc > 0) else []
         # ipdb.set_trace()
-        if len(shots):
-            passed = []
-            option = copy.deepcopy(label2desc)
-            for i in range(len(shots)):
-                value = self.calculate_simarility(shots[i], text)
-                # print(value)
-                if float(value) >= self.threshold:
-                    passed.append(shots[i])
-                elif float(value) <= 10.0:
-                    ans_id = re.findall(pattern = r"ID: (\d+)", string = shots[i])
-                    ans_id = [k.replace("ID: ", "") for k in ans_id]
-                    ans_id = int(ans_id[0])
-                    # print(ans_id)
-                    # ipdb.set_trace()
-                    if ans_id in option:
-                        del option[ans_id]
-                        # print(f"delete {ans_id} label")
-            # ipdb.set_trace()
-            
-            option_text = '\n'.join([f"ID: {str(k)}, {v}" for k, v in option.items()])
-            if(len(passed)):
-                prompt = self.get_prompt(text, option_text, passed)
+        if len(wrong_shots):
+            option = copy.deepcopy(option_text)
+            for i in range(len(wrong_shots)):
+                ans_id = re.findall(pattern = r"ID: (\d+)", string = wrong_shots[i])
+                ans_id = [k.replace("ID: ", "") for k in ans_id]
+                ans_id = int(ans_id[0])
+                if ans_id in option:
+                    del option[ans_id]
+            if len(correct_shots):
+                prompt = self.get_prompt(text, option, correct_shots)
+            else:
+                prompt = self.get_prompt(text, option)
+        else:
+            if len(correct_shots):
+                prompt = self.get_prompt(text, option_text, correct_shots)
             else:
                 prompt = self.get_prompt(text, option_text)
-        else:
-            prompt = self.get_prompt(text, option_text)
 
         # ipdb.set_trace()
 
@@ -278,7 +243,8 @@ class ClassificationAgent(Agent):
         self.update_log_info(log_data={
             "num_input_tokens": len(self.tokenizer.encode(prompt)),
             "num_output_tokens": len(self.tokenizer.encode(response)),
-            "num_shots": str(len(shots)),
+            "correct_shots": str(len(correct_shots)),
+            "wrong_shots": str(len(wrong_shots)),
             "input_pred": prompt,
             "output_pred": response,
         })
@@ -289,12 +255,18 @@ class ClassificationAgent(Agent):
 
     def update(self, correctness: bool) -> bool:
         if correctness:
-            question = self.inputs[-1]
-            answer = self.model_outputs[-1]
-            chunk = self.get_shot_template(question, answer)
-            self.rag.insert(key = question, value = chunk)
+            if self.correct_rag.insert_acc < 500:
+                question = self.inputs[-1]
+                answer = self.model_outputs[-1]
+                chunk = self.get_shot_template(question, answer)
+                self.correct_rag.insert(key = question, value = chunk)
             return True
         else:
+            if self.wrong_rag.insert_acc < 700:
+                question = self.inputs[-1]
+                answer = self.model_outputs[-1]
+                chunk = self.get_shot_template(question, answer)
+                self.wrong_rag.insert(key = question, value = chunk)
             return False
 
 class SQLGenerationAgent(Agent):
