@@ -218,8 +218,8 @@ class ClassificationAgent(Agent):
         text: str
     ) -> str:
         option_text = '\n'.join([f"ID: {str(k)}, {v}" for k, v in label2desc.items()])
-        correct_shots = self.correct_rag.retrieve(query = text, top_k = self.correct_rag.top_k) if (self.correct_rag.insert_acc > 7) else []
-        wrong_shots = self.wrong_rag.retrieve(query = text, top_k = self.wrong_rag.top_k) if (self.wrong_rag.insert_acc > 7) else []
+        correct_shots = self.correct_rag.retrieve(query = text, top_k = self.correct_rag.top_k) if (self.correct_rag.insert_acc > 0) else []
+        wrong_shots = self.wrong_rag.retrieve(query = text, top_k = self.wrong_rag.top_k) if (self.wrong_rag.insert_acc > 0) else []
         # ipdb.set_trace()
         if len(wrong_shots):
             option = copy.deepcopy(label2desc)
@@ -426,8 +426,8 @@ class SQLGenerationAgent(Agent):
         return sql.strip()
 
     def __call__(self, table_schema: str, user_query: str) -> str:
-        correct_shots = self.correct_rag.retrieve(query=user_query, top_k=self.correct_rag.top_k) if (self.correct_rag.insert_acc > 0) else []
-        wrong_shots = self.correct_rag.retrieve(query=user_query, top_k=self.wrong_rag.top_k) if (self.wrong_rag.insert_acc > 20) else []
+        correct_shots = self.correct_rag.retrieve(query=user_query, top_k=self.correct_rag.top_k) if (self.correct_rag.insert_acc > 10) else []
+        wrong_shots = self.correct_rag.retrieve(query=user_query, top_k=self.wrong_rag.top_k) if (self.wrong_rag.insert_acc > 0) else []
 
         if len(correct_shots) and len(wrong_shots):
             prompt = self.get_prompt(table_schema, user_query, correct_shots, wrong_shots)
