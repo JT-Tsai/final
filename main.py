@@ -155,30 +155,67 @@ class ClassificationAgent(Agent):
         
         return self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
     
-    def get_prompt(self, text, option_text, shots = None):
-        if shots is None:
+    def get_prompt(self, text, option_text, T_shots = None, F_shots = None):
+        if T_shots is not None and F_shots is not None:
             prompt = f"""\
                 You are a professional medical doctor. Diagnose the patient based on the provided profile.
+
+                Possible Diagnoses (select one, in the format ID: <number>, <diagnosis>):
+                {option_text}
+
+                Examples of correct in judgment. Maybe not related about current Patient Profile.
+                {T_shots}
+
+                Examples of errors in judgment. Don’t make the same mistake again.
+                {F_shots}
+
+                Decide for yourself whether the above examples are useful.
 
                 Patient Profile:
                 {text}
 
+                Provide your diagnosis in this exact format: ID: <number>, <diagnosis>. Do not include any additional information.""".strip()
+        elif T_shots is not None:
+            prompt = f"""\
+                You are a professional medical doctor. Diagnose the patient based on the provided profile.
+
                 Possible Diagnoses (select one, in the format ID: <number>, <diagnosis>):
                 {option_text}
+
+                Examples of correct in judgment. Maybe not related about current Patient Profile.
+                {T_shots}
+
+                Decide for yourself whether the above examples are useful.
+
+                Patient Profile:
+                {text}
+
+                Provide your diagnosis in this exact format: ID: <number>, <diagnosis>. Do not include any additional information.""".strip()
+        elif F_shots is not None:
+            prompt = f"""\
+                You are a professional medical doctor. Diagnose the patient based on the provided profile.
+
+                Possible Diagnoses (select one, in the format ID: <number>, <diagnosis>):
+                {option_text}
+
+                Examples of errors in judgment. Don’t make the same mistake again.
+                {F_shots}
+
+                Decide for yourself whether the above examples are useful.
+
+                Patient Profile:
+                {text}
 
                 Provide your diagnosis in this exact format: ID: <number>, <diagnosis>. Do not include any additional information.""".strip()
         else:
             prompt = f"""\
                 You are a professional medical doctor. Diagnose the patient based on the provided profile.
 
-                Possible Diagnoses (select one, in the format ID: <number>, <diagnosis>):
-                {option_text}
-
-                Reference Cases for Your Review, maybe not related about current Patient Profile. Judge for yourself whether it is useful:
-                {shots}
-
                 Patient Profile:
                 {text}
+
+                Possible Diagnoses (select one, in the format ID: <number>, <diagnosis>):
+                {option_text}
 
                 Provide your diagnosis in this exact format: ID: <number>, <diagnosis>. Do not include any additional information.""".strip()
 
@@ -221,22 +258,14 @@ class ClassificationAgent(Agent):
         correct_shots = self.correct_rag.retrieve(query = text, top_k = self.correct_rag.top_k) if (self.correct_rag.insert_acc > 0) else []
         wrong_shots = self.wrong_rag.retrieve(query = text, top_k = self.wrong_rag.top_k) if (self.wrong_rag.insert_acc > 0) else []
         # ipdb.set_trace()
-        if len(wrong_shots):
-            option = copy.deepcopy(label2desc)
-            for i in range(len(wrong_shots)):
-                ans_id = re.findall(pattern = r"ID: (\d+)", string = wrong_shots[i])
-                ans_id = [k.replace("ID: ", "") for k in ans_id]
-                ans_id = int(ans_id[0])
-                if ans_id in option:
-                    del option[ans_id]
-            
-            option_text = '\n'.join([f"ID: {str(k)}, {v}" for k, v in option.items()])
-
-        if len(correct_shots):
-            prompt = self.get_prompt(text, option_text, correct_shots)
+        if len(correct_shots) and len(wrong_shots):
+            prompt = self.get_prompt(text, option_text, correct_shots, wrong_shots)
+        elif len(correct_shots):
+            prompt = self.get_prompt(text, option_text, T_shots=correct_shots)
+        elif len(wrong_shots):
+            prompt = self.get_prompt(text, option_text, F_shots=wrong_shots)
         else:
             prompt = self.get_prompt(text, option_text)
-
         # ipdb.set_trace()
 
         messages = [
@@ -383,26 +412,63 @@ class SQLGenerationAgent(Agent):
         return self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
     
     def get_prompt(self, schema: str, query: str, T_shots = None, F_shots = None) -> str:
-        if shots is None:
-            prompt = f"""\
+        if T_shots is not None and F_shots is not None:
+            prompt = f"""\ 
                 You are an expert SQL developer. Write SQL code to answer the given query based on the provided table schema.
 
                 Table Schema:
                 {schema}
+
+                Similar Examples for Reference (correct examples):
+                {T_shots}
+
+                Examples of errors in SQL queries. Avoid making these mistakes:
+                {F_shots}
+
+                Decide for yourself whether the above examples are useful.
+
+                User Query:
+                {query}
+
+                Write a valid SQL query that answers the user's question. Only provide the SQL code without any explanations.""".strip()
+        elif T_shots is not None:
+            prompt = f"""\ 
+                You are an expert SQL developer. Write SQL code to answer the given query based on the provided table schema.
+
+                Table Schema:
+                {schema}
+
+                Similar Examples for Reference (correct examples):
+                {T_shots}
+
+                Decide for yourself whether the above examples are useful.
+
+                User Query:
+                {query}
+
+                Write a valid SQL query that answers the user's question. Only provide the SQL code without any explanations.""".strip()
+        elif F_shots is not None:
+            prompt = f"""\ 
+                You are an expert SQL developer. Write SQL code to answer the given query based on the provided table schema.
+
+                Table Schema:
+                {schema}
+
+                Examples of errors in SQL queries. Avoid making these mistakes:
+                {F_shots}
+
+                Decide for yourself whether the above examples are useful.
 
                 User Query:
                 {query}
 
                 Write a valid SQL query that answers the user's question. Only provide the SQL code without any explanations.""".strip()
         else:
-            prompt = f"""\
+            prompt = f"""\ 
                 You are an expert SQL developer. Write SQL code to answer the given query based on the provided table schema.
 
                 Table Schema:
                 {schema}
-
-                Similar Examples for Reference:
-                {shots}
 
                 User Query:
                 {query}
@@ -456,12 +522,20 @@ class SQLGenerationAgent(Agent):
 
     def update(self, correctness: bool) -> bool:
         if correctness:
-            schema, query = self.inputs[-1]
-            sql = self.model_outputs[-1]
-            chunk = self.get_shot_template(schema, query, sql)
-            self.rag.insert(key=query, value=chunk)
+            if self.correct_rag.insert_acc < 500:
+                question = self.inputs[-1]
+                answer = self.model_outputs[-1]
+                chunk = self.get_shot_template(question, answer)
+                self.correct_rag.insert(key = question, value = chunk)
             return True
-        return False
+        else:
+            if self.wrong_rag.insert_acc < 700:
+                question = self.inputs[-1]
+                answer = self.model_outputs[-1]
+                chunk = self.get_shot_template(question, answer)
+                self.wrong_rag.insert(key = question, value = chunk)
+            return False
+        
         
 if __name__ == "__main__":
     from argparse import ArgumentParser
