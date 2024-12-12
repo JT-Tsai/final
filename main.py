@@ -102,16 +102,24 @@ class ClassificationAgent(Agent):
         
 
         # rag_config
-        rag_config = {
+        T_rag_config = {
             # I think we need to finetune embedding_model when we select the model to implement.
             "embedding_model": config.get("embedding_model") \
                 if config.get("embedding_model") is not None else "BAAI/bge-base-en-v1.5",
             "seed": config.get("seed") if config.get("seed") is not None else 42,
-            "top_k": config.get("top_k") if config.get("top_k") is not None else 5,
+            "top_k": config.get("top_Tk") if config.get("top_Tk") is not None else 5,
             "order": config.get("order") if config.get("order") is not None else "similar_at_top",
         }
-        self.correct_rag = RAG(rag_config)
-        self.wrong_rag = RAG(rag_config)
+        F_rag_config = {
+            # I think we need to finetune embedding_model when we select the model to implement.
+            "embedding_model": config.get("embedding_model") \
+                if config.get("embedding_model") is not None else "BAAI/bge-base-en-v1.5",
+            "seed": config.get("seed") if config.get("seed") is not None else 42,
+            "top_k": config.get("top_Fk") if config.get("top_Fk") is not None else 5,
+            "order": config.get("order") if config.get("order") is not None else "similar_at_top",
+        }
+        self.correct_rag = RAG(T_rag_config)
+        self.wrong_rag = RAG(F_rag_config)
  
         # gen max token
         self.max_token = config.get("max_token") if config.get("max_token") is not None else 32
@@ -268,40 +276,192 @@ class ClassificationAgent(Agent):
             return False
 
 class SQLGenerationAgent(Agent):
-    """
-    An agent that generates SQL code based on the given table schema and the user query.
-    """
     def __init__(self, config: dict) -> None:
-        """
-        Initialize your LLM here
-        """
-        # TODO
-        raise NotImplementedError
+        super().__init__(config)
+        
+        # device
+        self.device = config.get("device")
+        self.device_map = self.device
 
-    def __call__(
-        self,
-        table_schema: str,
-        user_query: str
-    ) -> str:
-        """
-        Generate SQL code based on the given table schema and the user query.
+        if torch.cuda.device_count() > 1:
+            self.device_map = "auto"
+        
+        model_name = config.get("model_name")
 
-        Args:
-            table_schema (str): The table schema.
-            user_query (str): The user query.
+        # tokenizer and model
+        if config.get("tokenizer_name") is not None:
+            tokenizer_name = config.get("tokenizer_name")    
+        else:
+            tokenizer_name = model_name
+        
+        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+        print(f"load tokenizer : {tokenizer_name}")
+        print(f"load model : {model_name}")
+        
 
-        Returns:
-            str: The SQL code that the LLM generates.
-        """
-        # TODO: Note that your output should be a valid SQL code only.
-        raise NotImplementedError
+        if config.get("use_8bits"):
+            self.model = AutoModelForCausalLM.from_pretrained(
+                model_name, 
+                quantization_config = get_bnb_config(bits_8 = True),
+                torch_dtype = torch.float16,
+                # torch_dtype = torch.bfloat16 if type == "bf16" else (torch.float16 if type == "fp16" else torch.float32),
+                device_map = self.device_map
+            )
+
+            # ipdb.set_trace()
+            print(f"load model using quantization (8bits)")
+        elif config.get("use_4bits"):
+            self.model = AutoModelForCausalLM.from_pretrained(
+                model_name,
+                quantization_config = get_bnb_config(bits_4 = True),
+                torch_dtype = torch.float16,
+                device_map = self.device_map
+            )
+
+            print(f"load model using quantization (4bits)")
+        else:
+            self.model = AutoModelForCausalLM.from_pretrained(
+                model_name,
+                torch_type = torch.float16,
+                # torch_dtype = torch.bfloat16 if type == "bf16" else (torch.float16 if type == "fp16" else torch.float32),
+                device_map = self.device_map,
+            )
+            # ipdb.set_trace()
+
+        self.model.eval()
+        
+
+        # rag_config
+        T_rag_config = {
+            # I think we need to finetune embedding_model when we select the model to implement.
+            "embedding_model": config.get("embedding_model") \
+                if config.get("embedding_model") is not None else "BAAI/bge-base-en-v1.5",
+            "seed": config.get("seed") if config.get("seed") is not None else 42,
+            "top_k": config.get("top_Tk") if config.get("top_Tk") is not None else 5,
+            "order": config.get("order") if config.get("order") is not None else "similar_at_top",
+        }
+        F_rag_config = {
+            "embedding_model": config.get("embedding_model") \
+                if config.get("embedding_model") is not None else "BAAI/bge-base-en-v1.5",
+            "seed": config.get("seed") if config.get("seed") is not None else 42,
+            "top_k": config.get("top_Fk") if config.get("top_Fk") is not None else 5,
+            "order": config.get("order") if config.get("order") is not None else "similar_at_top",
+        }
+        self.correct_rag = RAG(T_rag_config)
+        self.wrong_rag = RAG(F_rag_config)
+ 
+        # gen max token
+        self.max_token = config.get("max_token") if config.get("max_token") is not None else 512
+        self.top_p = config.get("top_p")
+
+        # save the streaming inputs and outputs for iterative improvement
+        self.inputs = list()
+        self.model_outputs = list()
+
+
+    def generate_response(self, message: list) -> str:
+        text_chat = self.tokenizer.apply_chat_template(
+            message,
+            tokenize=False,
+            add_generation_prompt=True
+        )
+        model_inputs = self.tokenizer([text_chat], return_tensors="pt").to(self.device)
+        
+        with torch.inference_mode():
+            generated_ids = self.model.generate(
+                **model_inputs,
+                max_new_tokens=self.max_token,
+                do_sample=True,
+                top_p=self.top_p,
+                temperature=1.0,
+            )
+        
+        generated_ids = [
+            output_ids[len(input_ids):] for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
+        ]
+        
+        return self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
+    
+    def get_prompt(self, schema: str, query: str, T_shots = None, F_shots = None) -> str:
+        if shots is None:
+            prompt = f"""\
+                You are an expert SQL developer. Write SQL code to answer the given query based on the provided table schema.
+
+                Table Schema:
+                {schema}
+
+                User Query:
+                {query}
+
+                Write a valid SQL query that answers the user's question. Only provide the SQL code without any explanations.""".strip()
+        else:
+            prompt = f"""\
+                You are an expert SQL developer. Write SQL code to answer the given query based on the provided table schema.
+
+                Table Schema:
+                {schema}
+
+                Similar Examples for Reference:
+                {shots}
+
+                User Query:
+                {query}
+
+                Write a valid SQL query that answers the user's question. Only provide the SQL code without any explanations.""".strip()
+            
+        return strip_all_lines(prompt)
+    
+    def get_shot_template(self, query: str, sql: str) -> str:
+        prompt = f"""User Query: {query}\nSQL: {sql}"""
+        return strip_all_lines(prompt)
+
+    def clean_sql(self, sql: str) -> str:
+        """Clean and standardize SQL output"""
+        # Remove comments
+        sql = re.sub(r'--.*$', '', sql, flags=re.MULTILINE)
+        # Remove multiple spaces/newlines
+        sql = ' '.join(sql.split())
+        # Remove any non-SQL content
+        sql = re.sub(r'```sql|```', '', sql)
+        return sql.strip()
+
+    def __call__(self, table_schema: str, user_query: str) -> str:
+        correct_shots = self.correct_rag.retrieve(query=user_query, top_k=self.correct_rag.top_k) if (self.correct_rag.insert_acc > 0) else []
+        wrong_shots = self.correct_rag.retrieve(query=user_query, top_k=self.wrong_rag.top_k) if (self.wrong_rag.insert_acc > 0) else []
+
+        if len(correct_shots) and len(wrong_shots):
+            prompt = self.get_prompt(table_schema, user_query, correct_shots, wrong_shots)
+        elif len(correct_shots):
+            prompt = self.get_prompt(table_schema, user_query, T_shots=correct_shots)
+        elif len(wrong_shots):
+            prompt = self.get_prompt(table_schema, user_query, F_shots = wrong_shots)
+        else:
+            prompt = self.get_prompt(table_schema, user_query)
+
+        messages = [{"role": "user", "content": prompt}]
+        response = self.generate_response(messages)
+        sql_code = self.clean_sql(response)
+        
+        self.update_log_info(log_data={
+            "num_input_tokens": len(self.tokenizer.encode(prompt)),
+            "num_output_tokens": len(self.tokenizer.encode(response)),
+            "num_shots": str(len(correct_shots) + len(wrong_shots)),
+            "input_pred": prompt,
+            "output_pred": sql_code,
+        })
+        
+        self.inputs.append((table_schema, user_query))
+        self.model_outputs.append(sql_code)
+        return sql_code
 
     def update(self, correctness: bool) -> bool:
-        """
-        Update your LLM agent based on the correctness of its own SQL    code at the current time step.
-        """
-        # TODO
-        raise NotImplementedError
+        if correctness:
+            schema, query = self.inputs[-1]
+            sql = self.model_outputs[-1]
+            chunk = self.get_shot_template(schema, query, sql)
+            self.rag.insert(key=query, value=chunk)
+            return True
+        return False
         
 if __name__ == "__main__":
     from argparse import ArgumentParser
@@ -318,7 +478,8 @@ if __name__ == "__main__":
     parser.add_argument('--output_path', type=str, default = None)
     parser.add_argument('--use_wandb', action = "store_true")
     parser.add_argument('--seed', type = int, default = 42)
-    parser.add_argument('--top_k', type = int, default = 5)
+    parser.add_argument('--top_Tk', type = int, default = 5)
+    parser.add_argument('--top_Fk', type = int, default = 5)
     parser.add_argument('--top_p', type = float, default = 0.75)
     parser.add_argument('--description', type = str, default = None)
 
@@ -346,7 +507,8 @@ if __name__ == "__main__":
         "use_4bits": args.use_4bits,
         "weight_type": args.weight_type,
         "seed": args.seed,
-        "top_k": args.top_k,
+        "top_Tk": args.top_Tk,
+        "top_Fk": args.top_Fk,
         "top_p": args.top_p,
     }
     agent = agent_name(config)
