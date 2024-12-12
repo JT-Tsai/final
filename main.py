@@ -214,22 +214,20 @@ class ClassificationAgent(Agent):
         wrong_shots = self.wrong_rag.retrieve(query = text, top_k = self.wrong_rag.top_k) if (self.wrong_rag.insert_acc > 0) else []
         # ipdb.set_trace()
         if len(wrong_shots):
-            option = copy.deepcopy(option_text)
+            option = copy.deepcopy(label2desc)
             for i in range(len(wrong_shots)):
                 ans_id = re.findall(pattern = r"ID: (\d+)", string = wrong_shots[i])
                 ans_id = [k.replace("ID: ", "") for k in ans_id]
                 ans_id = int(ans_id[0])
                 if ans_id in option:
                     del option[ans_id]
-            if len(correct_shots):
-                prompt = self.get_prompt(text, option, correct_shots)
-            else:
-                prompt = self.get_prompt(text, option)
+            
+            option_text = '\n'.join([f"ID: {str(k)}, {v}" for k, v in option.items()])
+
+        if len(correct_shots):
+            prompt = self.get_prompt(text, option_text, correct_shots)
         else:
-            if len(correct_shots):
-                prompt = self.get_prompt(text, option_text, correct_shots)
-            else:
-                prompt = self.get_prompt(text, option_text)
+            prompt = self.get_prompt(text, option_text)
 
         # ipdb.set_trace()
 
