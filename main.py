@@ -174,7 +174,7 @@ class ClassificationAgent(Agent):
                 Possible Diagnoses (select one, in the format ID: <number>, <diagnosis>):
                 {option_text}
 
-                Reference Cases for Your Review:
+                Reference Cases for Your Review, maybe not related about current Patient Profile. Judge for yourself whether it is useful:
                 {shots}
 
                 Patient Profile:
