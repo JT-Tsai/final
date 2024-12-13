@@ -369,42 +369,42 @@ class SQLGenerationAgent(Agent):
 
 
     def __call__(self, table_schema: str, user_query: str) -> str:
+        # Generate initial prompt and response
         prompt = self.get_prompt(table_schema, user_query)
-
         messages = [{"role": "user", "content": prompt}]
         response = self.generate_response(messages)
         sql_code, value = self.clean_sql(response)
-        # ipdb.set_trace()
 
-        second_prompt = None
-        second_sql_code = None
-        flag = False
-        shots = None
+        # Initialize variables for second stage
+        second_prompt, second_sql_code, shots = None, None, None
+
+        # Check if a second prompt is needed
         if int(value) > 20:
-            flag = True
-            second_prompt = None
-            if self.rag.insert_acc > 10:
-                shots = self.rag.retrieve(query=user_query, top_k=self.rag.top_k)
-                second_prompt = self.get_prompt(table_schema, user_query, sql_code, shots)
-            else:
-                second_prompt = self.get_prompt(table_schema, user_query, sql_code)
+            shots = self.rag.retrieve(query=user_query, top_k=self.rag.top_k) if self.rag.insert_acc > 10 else None
+            second_prompt = self.get_prompt(table_schema, user_query, sql_code, shots)
             messages = [{"role": "user", "content": second_prompt}]
             response = self.generate_response(messages)
             second_sql_code, value = self.clean_sql(response)
 
-            # ipdb.set_trace()
-        
+        # Select final outputs
+        final_prompt = second_prompt if second_prompt else prompt
+        final_sql_code = second_sql_code if second_sql_code else sql_code
+
+        # Log information
         self.update_log_info(log_data={
-            "num_input_tokens": len(self.tokenizer.encode(second_prompt if flag else prompt)),
+            "num_input_tokens": len(self.tokenizer.encode(final_prompt)),
             "num_output_tokens": len(self.tokenizer.encode(response)),
-            "num_shots": str(len(shots) if flag else 0),
-            "input_pred": second_prompt if flag else prompt,
-            "output_pred": second_sql_code if flag else sql_code,
+            "num_shots": len(shots) if shots else 0,
+            "input_pred": final_prompt,
+            "output_pred": final_sql_code,
         })
-        
+
+        # Store inputs and outputs
         self.inputs.append((table_schema, user_query))
-        self.model_outputs.append(second_sql_code if flag else sql_code)
-        return second_sql_code if flag else sql_code
+        self.model_outputs.append(final_sql_code)
+
+        return final_sql_code
+
 
     def update(self, correctness: bool) -> bool:
         if correctness:
