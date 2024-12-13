@@ -308,21 +308,20 @@ class SQLGenerationAgent(Agent):
                 Modify (if necessary) a valid SQL query that answers the user's question. Only provide the SQL code without any explanations.
                 And give me a difficulty from 0 to 100 to generate code from the given requirements.""".strip()
         elif code is not None:
-            if code is not None and shots is not None:
-                prompt = f"""\
-                    You are an expert SQL developer. Check and correct if necessary to ensure the code is executable.
+            prompt = f"""\
+                You are an expert SQL developer. Check and correct if necessary to ensure the code is executable.
 
-                    Table Schema:
-                    {schema}
+                Table Schema:
+                {schema}
 
-                    User Query:
-                    {query}
+                User Query:
+                {query}
 
-                    Code:
-                    {code}
-                    
-                    Modify (if necessary) a valid SQL query that answers the user's question. Only provide the SQL code without any explanations.
-                    And give me a difficulty from 0 to 100 to generate code from the given requirements.""".strip()        
+                Code:
+                {code}
+                
+                Modify (if necessary) a valid SQL query that answers the user's question. Only provide the SQL code without any explanations.
+                And give me a difficulty from 0 to 100 to generate code from the given requirements.""".strip()        
         else:
             prompt = f"""\
                 You are an expert SQL developer. Write SQL code to answer the given query based on the provided table schema.
