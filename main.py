@@ -11,29 +11,21 @@ from utils import RAG, strip_all_lines
 import torch
 import re
 import random
-import copy
 
 # import ipdb
 
 
-def get_bnb_config(bits_8 = False, bits_4 = False):
-    """8bits Q"""
-    if bits_8:
-        quantization_config = BitsAndBytesConfig(
-            load_in_8bit = True,
-            llm_int8_has_fp16_weight=False
-            # llm_int8_has_fp16_weight=True
-        )
-    """4bits Q"""
-    if bits_4: 
-        quantization_config = BitsAndBytesConfig(
-            load_in_4bit=True,
-            bnb_4bit_use_double_quant=False,
-            bnb_4bit_quant_type="fp4",
-            bnb_4bit_compute_dtype="float16",
-        )
+
+def get_bnb_config():
+    """function for model quantization with int8 setting"""
+    quantization_config = BitsAndBytesConfig(
+        load_in_8bit = True,
+        llm_int8_has_fp16_weight=False
+        # llm_int8_has_fp16_weight=True
+    )
 
     return quantization_config
+
 
 
 class ClassificationAgent(Agent):
@@ -48,13 +40,8 @@ class ClassificationAgent(Agent):
         
         # device
         self.device = config.get("device")
-        self.device_map = self.device
-
-        if torch.cuda.device_count() > 1:
-            self.device_map = "auto"
         
         model_name = config.get("model_name")
-        type = config.get("weight_type")
 
         # tokenizer and model
         if config.get("tokenizer_name") is not None:
@@ -68,59 +55,34 @@ class ClassificationAgent(Agent):
 
         print(f"load model which name is {model_name}")
         
-
         if config.get("use_8bits"):
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_name, 
-                quantization_config = get_bnb_config(bits_8 = True),
-                torch_dtype = torch.float16,
-                # torch_dtype = torch.bfloat16 if type == "bf16" else (torch.float16 if type == "fp16" else torch.float32),
-                device_map = self.device_map
+                quantization_config = get_bnb_config(), 
+                device_map = self.device
             )
-
-            # ipdb.set_trace()
-            print(f"load model using quantization")
-        elif config.get("use_4bits"):
-            self.model = AutoModelForCausalLM.from_pretrained(
-                model_name,
-                quantization_config = get_bnb_config(bits_4 = True),
-                torch_dtype = torch.float16,
-                device_map = self.device_map
-            )
-
             print(f"load model using quantization")
         else:
+            weight_type = config.get("weight_type")
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_name,
-                torch_type = torch.float16,
-                # torch_dtype = torch.bfloat16 if type == "bf16" else (torch.float16 if type == "fp16" else torch.float32),
-                device_map = self.device_map,
+                torch_dtype = torch.bfloat16 if weight_type == "bf16" else torch.float16,
+                device_map = self.device,
             )
-            # ipdb.set_trace()
 
         self.model.eval()
-        
 
         # rag_config
-        T_rag_config = {
+        rag_config = {
             # I think we need to finetune embedding_model when we select the model to implement.
             "embedding_model": config.get("embedding_model") \
                 if config.get("embedding_model") is not None else "BAAI/bge-base-en-v1.5",
             "seed": config.get("seed") if config.get("seed") is not None else 42,
-            "top_k": config.get("top_Tk") if config.get("top_Tk") is not None else 5,
+            "top_k": config.get("top_k") if config.get("top_k") is not None else 5,
             "order": config.get("order") if config.get("order") is not None else "similar_at_top",
         }
-        F_rag_config = {
-            # I think we need to finetune embedding_model when we select the model to implement.
-            "embedding_model": config.get("embedding_model") \
-                if config.get("embedding_model") is not None else "BAAI/bge-base-en-v1.5",
-            "seed": config.get("seed") if config.get("seed") is not None else 42,
-            "top_k": config.get("top_Fk") if config.get("top_Fk") is not None else 5,
-            "order": config.get("order") if config.get("order") is not None else "similar_at_top",
-        }
-        self.correct_rag = RAG(T_rag_config)
-        self.wrong_rag = RAG(F_rag_config)
- 
+        self.rag = RAG(rag_config)
+
         # gen max token
         self.max_token = config.get("max_token") if config.get("max_token") is not None else 32
         self.top_p = config.get("top_p")
@@ -129,7 +91,6 @@ class ClassificationAgent(Agent):
         self.inputs = list()
         self.model_outputs = list()
 
-        
     def generate_response(self, message: list) -> str:
         text_chat = self.tokenizer.apply_chat_template(
             message,
@@ -155,69 +116,35 @@ class ClassificationAgent(Agent):
         
         return self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
     
-    def get_prompt(self, text, option_text, T_shots = None, F_shots = None):
-        if T_shots is not None and F_shots is not None:
-            prompt = f"""\
-                You are a professional medical doctor. Diagnose the patient based on the provided profile.
+    def get_prompt(self, text, option_text, shots = None):
+        if shots is None:
+            prompt = f""" \
+            Act as a professional medical doctor that can diagnose the patient based on the patient profile.
+            Provide your diagnosis in the following format: ID: <number>, <diagnosis>
 
-                Possible Diagnoses (select one, in the format ID: <number>, <diagnosis>):
-                {option_text}
+            {text}
 
-                Examples of correct in judgment. Maybe not related about current Patient Profile.
-                {T_shots}
+            All possible diagnoses for you to choose from are as follows (one diagnosis per line, in the format of ID: <number>, <diagnosis>):
+            {option_text}
 
-                Examples of errors in judgment. Don’t make the same mistake again.
-                {F_shots}
-
-                Decide for yourself whether the above examples are useful.
-
-                Patient Profile:
-                {text}
-
-                Provide your diagnosis in this exact format: ID: <number>, <diagnosis>. Do not include any additional information.""".strip()
-        elif T_shots is not None:
-            prompt = f"""\
-                You are a professional medical doctor. Diagnose the patient based on the provided profile.
-
-                Possible Diagnoses (select one, in the format ID: <number>, <diagnosis>):
-                {option_text}
-
-                Examples of correct in judgment. Maybe not related about current Patient Profile.
-                {T_shots}
-
-                Decide for yourself whether the above examples are useful.
-
-                Patient Profile:
-                {text}
-
-                Provide your diagnosis in this exact format: ID: <number>, <diagnosis>. Do not include any additional information.""".strip()
-        elif F_shots is not None:
-            prompt = f"""\
-                You are a professional medical doctor. Diagnose the patient based on the provided profile.
-
-                Possible Diagnoses (select one, in the format ID: <number>, <diagnosis>):
-                {option_text}
-
-                Examples of errors in judgment. Don’t make the same mistake again.
-                {F_shots}
-
-                Decide for yourself whether the above examples are useful.
-
-                Patient Profile:
-                {text}
-
-                Provide your diagnosis in this exact format: ID: <number>, <diagnosis>. Do not include any additional information.""".strip()
+            Now, directly provide the diagnosis for the patient use the above format. Don't give me any additional information.""".strip()
         else:
             prompt = f"""\
-                You are a professional medical doctor. Diagnose the patient based on the provided profile.
+            Act as a professional medical doctor that can diagnose the patient based on the patient profile.
+            Provide your diagnosis in the following format: ID: <number>, <diagnosis>
+            
+            All possible diagnoses for you to choose from are as follows (one diagnosis per line, in the format of ID: <number>, <diagnosis>):
+            {option_text}
 
-                Patient Profile:
-                {text}
-
-                Possible Diagnoses (select one, in the format ID: <number>, <diagnosis>):
-                {option_text}
-
-                Provide your diagnosis in this exact format: ID: <number>, <diagnosis>. Do not include any additional information.""".strip()
+            The following are some cases for reference.
+            
+            {shots}
+            
+            Now it's your turn.
+            
+            {text}
+            
+            Now, directly provide the diagnosis for the patient use the above format. Don't give me any additional information.""".strip()
 
         return strip_all_lines(prompt)
     
@@ -239,7 +166,7 @@ class ClassificationAgent(Agent):
                 print(Fore.RED + f"Prediction {pred_text} not found in the label set. Randomly select one." + Style.RESET_ALL)
                 result = random.choice(list(label2desc.keys()))
         else:
-            if len(candidate) > 1:
+            if len(result) > 1:
                 print(Fore.YELLOW + f"Extracted numbers {candidate} is not exactly one. Select the first one." + Style.RESET_ALL)
                 result = candidate[0]
             else:
@@ -255,17 +182,13 @@ class ClassificationAgent(Agent):
         text: str
     ) -> str:
         option_text = '\n'.join([f"ID: {str(k)}, {v}" for k, v in label2desc.items()])
-        correct_shots = self.correct_rag.retrieve(query = text, top_k = self.correct_rag.top_k) if (self.correct_rag.insert_acc > 0) else []
-        wrong_shots = self.wrong_rag.retrieve(query = text, top_k = self.wrong_rag.top_k) if (self.wrong_rag.insert_acc > 0) else []
         # ipdb.set_trace()
-        if len(correct_shots) and len(wrong_shots):
-            prompt = self.get_prompt(text, option_text, correct_shots, wrong_shots)
-        elif len(correct_shots):
-            prompt = self.get_prompt(text, option_text, T_shots=correct_shots)
-        elif len(wrong_shots):
-            prompt = self.get_prompt(text, option_text, F_shots=wrong_shots)
+        shots = self.rag.retrieve(query = text, top_k = self.rag.top_k) if (self.rag.insert_acc > 0) else []
+        if len(shots):
+            prompt = self.get_prompt(text, option_text, shots)
         else:
             prompt = self.get_prompt(text, option_text)
+
         # ipdb.set_trace()
 
         messages = [
@@ -278,8 +201,7 @@ class ClassificationAgent(Agent):
         self.update_log_info(log_data={
             "num_input_tokens": len(self.tokenizer.encode(prompt)),
             "num_output_tokens": len(self.tokenizer.encode(response)),
-            "correct_shots": str(len(correct_shots)),
-            "wrong_shots": str(len(wrong_shots)),
+            "num_shots": str(len(shots)),
             "input_pred": prompt,
             "output_pred": response,
         })
@@ -290,252 +212,49 @@ class ClassificationAgent(Agent):
 
     def update(self, correctness: bool) -> bool:
         if correctness:
-            if self.correct_rag.insert_acc < 500:
-                question = self.inputs[-1]
-                answer = self.model_outputs[-1]
-                chunk = self.get_shot_template(question, answer)
-                self.correct_rag.insert(key = question, value = chunk)
+            question = self.inputs[-1]
+            answer = self.model_outputs[-1]
+            chunk = self.get_shot_template(question, answer)
+            self.rag.insert(key = question, value = chunk)
             return True
         else:
-            if self.wrong_rag.insert_acc < 700:
-                question = self.inputs[-1]
-                answer = self.model_outputs[-1]
-                chunk = self.get_shot_template(question, answer)
-                self.wrong_rag.insert(key = question, value = chunk)
             return False
 
 class SQLGenerationAgent(Agent):
+    """
+    An agent that generates SQL code based on the given table schema and the user query.
+    """
     def __init__(self, config: dict) -> None:
-        super().__init__(config)
-        
-        # device
-        self.device = config.get("device")
-        self.device_map = self.device
+        """
+        Initialize your LLM here
+        """
+        # TODO
+        raise NotImplementedError
 
-        if torch.cuda.device_count() > 1:
-            self.device_map = "auto"
-        
-        model_name = config.get("model_name")
+    def __call__(
+        self,
+        table_schema: str,
+        user_query: str
+    ) -> str:
+        """
+        Generate SQL code based on the given table schema and the user query.
 
-        # tokenizer and model
-        if config.get("tokenizer_name") is not None:
-            tokenizer_name = config.get("tokenizer_name")    
-        else:
-            tokenizer_name = model_name
-        
-        self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
-        print(f"load tokenizer : {tokenizer_name}")
-        print(f"load model : {model_name}")
-        
+        Args:
+            table_schema (str): The table schema.
+            user_query (str): The user query.
 
-        if config.get("use_8bits"):
-            self.model = AutoModelForCausalLM.from_pretrained(
-                model_name, 
-                quantization_config = get_bnb_config(bits_8 = True),
-                torch_dtype = torch.float16,
-                # torch_dtype = torch.bfloat16 if type == "bf16" else (torch.float16 if type == "fp16" else torch.float32),
-                device_map = self.device_map
-            )
-
-            # ipdb.set_trace()
-            print(f"load model using quantization (8bits)")
-        elif config.get("use_4bits"):
-            self.model = AutoModelForCausalLM.from_pretrained(
-                model_name,
-                quantization_config = get_bnb_config(bits_4 = True),
-                torch_dtype = torch.float16,
-                device_map = self.device_map
-            )
-
-            print(f"load model using quantization (4bits)")
-        else:
-            self.model = AutoModelForCausalLM.from_pretrained(
-                model_name,
-                torch_type = torch.float16,
-                # torch_dtype = torch.bfloat16 if type == "bf16" else (torch.float16 if type == "fp16" else torch.float32),
-                device_map = self.device_map,
-            )
-            # ipdb.set_trace()
-
-        self.model.eval()
-        
-
-        # rag_config
-        T_rag_config = {
-            # I think we need to finetune embedding_model when we select the model to implement.
-            "embedding_model": config.get("embedding_model") \
-                if config.get("embedding_model") is not None else "BAAI/bge-base-en-v1.5",
-            "seed": config.get("seed") if config.get("seed") is not None else 42,
-            "top_k": config.get("top_Tk") if config.get("top_Tk") is not None else 5,
-            "order": config.get("order") if config.get("order") is not None else "similar_at_top",
-        }
-        F_rag_config = {
-            "embedding_model": config.get("embedding_model") \
-                if config.get("embedding_model") is not None else "BAAI/bge-base-en-v1.5",
-            "seed": config.get("seed") if config.get("seed") is not None else 42,
-            "top_k": config.get("top_Fk") if config.get("top_Fk") is not None else 5,
-            "order": config.get("order") if config.get("order") is not None else "similar_at_top",
-        }
-        self.correct_rag = RAG(T_rag_config)
-        self.wrong_rag = RAG(F_rag_config)
- 
-        # gen max token
-        self.max_token = config.get("max_token") if config.get("max_token") is not None else 512
-        self.top_p = config.get("top_p")
-
-        # save the streaming inputs and outputs for iterative improvement
-        self.inputs = list()
-        self.model_outputs = list()
-
-
-    def generate_response(self, message: list) -> str:
-        text_chat = self.tokenizer.apply_chat_template(
-            message,
-            tokenize=False,
-            add_generation_prompt=True
-        )
-        model_inputs = self.tokenizer([text_chat], return_tensors="pt").to(self.device)
-        
-        with torch.inference_mode():
-            generated_ids = self.model.generate(
-                **model_inputs,
-                max_new_tokens=self.max_token,
-                do_sample=True,
-                top_p=self.top_p,
-                temperature=1.0,
-            )
-        
-        generated_ids = [
-            output_ids[len(input_ids):] for input_ids, output_ids in zip(model_inputs.input_ids, generated_ids)
-        ]
-        
-        return self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
-    
-    def get_prompt(self, schema: str, query: str, T_shots = None, F_shots = None) -> str:
-        if T_shots is not None and F_shots is not None:
-            prompt = f"""\ 
-                You are an expert SQL developer. Write SQL code to answer the given query based on the provided table schema.
-
-                Table Schema:
-                {schema}
-
-                Similar Examples for Reference (correct examples):
-                {T_shots}
-
-                Examples of errors in SQL queries. Avoid making these mistakes:
-                {F_shots}
-
-                Decide for yourself whether the above examples are useful.
-
-                User Query:
-                {query}
-
-                Write a valid SQL query that answers the user's question. Only provide the SQL code without any explanations.""".strip()
-        elif T_shots is not None:
-            prompt = f"""\ 
-                You are an expert SQL developer. Write SQL code to answer the given query based on the provided table schema.
-
-                Table Schema:
-                {schema}
-
-                Similar Examples for Reference (correct examples):
-                {T_shots}
-
-                Decide for yourself whether the above examples are useful.
-
-                User Query:
-                {query}
-
-                Write a valid SQL query that answers the user's question. Only provide the SQL code without any explanations.""".strip()
-        elif F_shots is not None:
-            prompt = f"""\ 
-                You are an expert SQL developer. Write SQL code to answer the given query based on the provided table schema.
-
-                Table Schema:
-                {schema}
-
-                Examples of errors in SQL queries. Avoid making these mistakes:
-                {F_shots}
-
-                Decide for yourself whether the above examples are useful.
-
-                User Query:
-                {query}
-
-                Write a valid SQL query that answers the user's question. Only provide the SQL code without any explanations.""".strip()
-        else:
-            prompt = f"""\ 
-                You are an expert SQL developer. Write SQL code to answer the given query based on the provided table schema.
-
-                Table Schema:
-                {schema}
-
-                User Query:
-                {query}
-
-                Write a valid SQL query that answers the user's question. Only provide the SQL code without any explanations.""".strip()
-            
-        return strip_all_lines(prompt)
-    
-    def get_shot_template(self, query: str, sql: str) -> str:
-        prompt = f"""User Query: {query}\nSQL: {sql}"""
-        return strip_all_lines(prompt)
-
-    def clean_sql(self, sql: str) -> str:
-        """Clean and standardize SQL output"""
-        # Remove comments
-        sql = re.sub(r'--.*$', '', sql, flags=re.MULTILINE)
-        # Remove multiple spaces/newlines
-        sql = ' '.join(sql.split())
-        # Remove any non-SQL content
-        sql = re.sub(r'```sql|```', '', sql)
-        return sql.strip()
-
-    def __call__(self, table_schema: str, user_query: str) -> str:
-        correct_shots = self.correct_rag.retrieve(query=user_query, top_k=self.correct_rag.top_k) if (self.correct_rag.insert_acc > 10) else []
-        wrong_shots = self.wrong_rag.retrieve(query=user_query, top_k=self.wrong_rag.top_k) if (self.wrong_rag.insert_acc > 0) else []
-
-        if len(correct_shots) and len(wrong_shots):
-            prompt = self.get_prompt(table_schema, user_query, correct_shots, wrong_shots)
-        elif len(correct_shots):
-            prompt = self.get_prompt(table_schema, user_query, T_shots=correct_shots)
-        elif len(wrong_shots):
-            prompt = self.get_prompt(table_schema, user_query, F_shots = wrong_shots)
-        else:
-            prompt = self.get_prompt(table_schema, user_query)
-
-        messages = [{"role": "user", "content": prompt}]
-        response = self.generate_response(messages)
-        sql_code = self.clean_sql(response)
-        
-        self.update_log_info(log_data={
-            "num_input_tokens": len(self.tokenizer.encode(prompt)),
-            "num_output_tokens": len(self.tokenizer.encode(response)),
-            "num_shots": str(len(correct_shots) + len(wrong_shots)),
-            "input_pred": prompt,
-            "output_pred": sql_code,
-        })
-        
-        self.inputs.append((table_schema, user_query))
-        self.model_outputs.append(sql_code)
-        return sql_code
+        Returns:
+            str: The SQL code that the LLM generates.
+        """
+        # TODO: Note that your output should be a valid SQL code only.
+        raise NotImplementedError
 
     def update(self, correctness: bool) -> bool:
-        if correctness:
-            if self.correct_rag.insert_acc < 500:
-                question = self.inputs[-1]
-                answer = self.model_outputs[-1]
-                chunk = self.get_shot_template(question, answer)
-                self.correct_rag.insert(key = question, value = chunk)
-            return True
-        else:
-            if self.wrong_rag.insert_acc < 700:
-                question = self.inputs[-1]
-                answer = self.model_outputs[-1]
-                chunk = self.get_shot_template(question, answer)
-                self.wrong_rag.insert(key = question, value = chunk)
-            return False
-        
+        """
+        Update your LLM agent based on the correctness of its own SQL    code at the current time step.
+        """
+        # TODO
+        raise NotImplementedError
         
 if __name__ == "__main__":
     from argparse import ArgumentParser
@@ -547,13 +266,11 @@ if __name__ == "__main__":
     parser.add_argument('--model_name', type=str, default = "Qwen/Qwen2.5-7B-Instruct")
     parser.add_argument('--device', type=str, default = "cuda")
     parser.add_argument('--use_8bits', action = "store_true")
-    parser.add_argument('--use_4bits', action = "store_true")
     parser.add_argument('--weight_type', type = str, default = None)
     parser.add_argument('--output_path', type=str, default = None)
     parser.add_argument('--use_wandb', action = "store_true")
     parser.add_argument('--seed', type = int, default = 42)
-    parser.add_argument('--top_Tk', type = int, default = 5)
-    parser.add_argument('--top_Fk', type = int, default = 5)
+    parser.add_argument('--top_k', type = float, default = 5)
     parser.add_argument('--top_p', type = float, default = 0.75)
     parser.add_argument('--description', type = str, default = None)
 
@@ -578,11 +295,9 @@ if __name__ == "__main__":
         "model_name": args.model_name,
         "device": args.device,
         "use_8bits": args.use_8bits,
-        "use_4bits": args.use_4bits,
         "weight_type": args.weight_type,
         "seed": args.seed,
-        "top_Tk": args.top_Tk,
-        "top_Fk": args.top_Fk,
+        "top_k": args.top_k,
         "top_p": args.top_p,
     }
     agent = agent_name(config)
