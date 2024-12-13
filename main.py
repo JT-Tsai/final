@@ -379,11 +379,12 @@ class SQLGenerationAgent(Agent):
         ipdb.set_trace()
 
         if int(value) > 20:
+            second_prompt = None
             if self.rag.insert_acc > 10:
-                prompt = self.get_prompt(table_schema, user_query, sql_code, shots)
+                second_prompt = self.get_prompt(table_schema, user_query, sql_code, shots)
             else:
-                prompt = self.get_prompt(table_schema, user_query, sql_code)
-            messages = [{"role": "user", "content": prompt}]
+                second_prompt = self.get_prompt(table_schema, user_query, sql_code)
+            messages = [{"role": "user", "content": second_prompt}]
             response = self.generate_response(messages)
             sql_code, value = self.clean_sql(response)
 
