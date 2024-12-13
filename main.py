@@ -174,7 +174,7 @@ class ClassificationAgent(Agent):
         text: str
     ) -> str:
         option_text = '\n'.join([f"ID: {str(k)}, {v}" for k, v in label2desc.items()])
-        shots = self.rag.retrieve(query = text, top_k = self.rag.top_k) if (self.rag.insert_acc > 25) else []
+        shots = self.rag.retrieve(query = text, top_k = self.rag.top_k) if (self.rag.insert_acc > 10) else []
         if len(shots):
             prompt = self.get_prompt(text, option_text, shots)
         else:
@@ -352,7 +352,7 @@ class SQLGenerationAgent(Agent):
 
 
     def __call__(self, table_schema: str, user_query: str) -> str:
-        shots = self.rag.retrieve(query=user_query, top_k=self.rag.top_k) if (self.rag.insert_acc > 10) else []
+        shots = self.rag.retrieve(query=user_query, top_k=self.rag.top_k) if (self.rag.insert_acc > 0) else []
         prompt = self.get_prompt(table_schema, user_query, shots) if shots else self.get_prompt(table_schema, user_query)
         
         messages = [{"role": "user", "content": prompt}]
