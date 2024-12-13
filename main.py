@@ -4,7 +4,6 @@ from colorama import Fore, Style
 from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
-    set_seed,
     BitsAndBytesConfig,
 )
 from utils import RAG, strip_all_lines
@@ -12,21 +11,14 @@ import torch
 import re
 import random
 
-import ipdb
-
-
-
 def get_bnb_config():
     """function for model quantization with int8 setting"""
     quantization_config = BitsAndBytesConfig(
         load_in_8bit = True,
         llm_int8_has_fp16_weight=False
-        # llm_int8_has_fp16_weight=True
     )
 
     return quantization_config
-
-
 
 class ClassificationAgent(Agent):
     """
@@ -40,6 +32,10 @@ class ClassificationAgent(Agent):
         
         # device
         self.device = config.get("device")
+        self.device_map = self.device
+
+        if torch.cuda.device_count() > 1:
+            self.device_map = "auto"
         
         model_name = config.get("model_name")
 
@@ -50,29 +46,26 @@ class ClassificationAgent(Agent):
             tokenizer_name = model_name
         
         self.tokenizer = AutoTokenizer.from_pretrained(tokenizer_name)
+
         print(f"load tokenizer which name is {tokenizer_name}")
-
-
         print(f"load model which name is {model_name}")
         
+
         if config.get("use_8bits"):
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_name, 
-                quantization_config = get_bnb_config(), 
-                device_map = self.device
+                quantization_config = get_bnb_config(),
+                device_map = self.device_map
             )
             print(f"load model using quantization")
         else:
             weight_type = config.get("weight_type")
             self.model = AutoModelForCausalLM.from_pretrained(
                 model_name,
-                torch_dtype = torch.bfloat16 if weight_type == "bf16" else torch.float16,
-                device_map = self.device,
+                device_map = self.device_map,
             )
 
         self.model.eval()
-
-        # rag_config
         rag_config = {
             # I think we need to finetune embedding_model when we select the model to implement.
             "embedding_model": config.get("embedding_model") \
@@ -118,33 +111,30 @@ class ClassificationAgent(Agent):
     
     def get_prompt(self, text, option_text, shots = None):
         if shots is None:
-            prompt = f""" \
-            Act as a professional medical doctor that can diagnose the patient based on the patient profile.
-            Provide your diagnosis in the following format: ID: <number>, <diagnosis>
+            prompt = f"""\
+                You are a professional medical doctor. Diagnose the patient based on the provided profile.
 
-            {text}
+                Patient Profile:
+                {text}
 
-            All possible diagnoses for you to choose from are as follows (one diagnosis per line, in the format of ID: <number>, <diagnosis>):
-            {option_text}
+                Possible Diagnoses (select one, in the format ID: <number>, <diagnosis>):
+                {option_text}
 
-            Now, directly provide the diagnosis for the patient use the above format. Don't give me any additional information.""".strip()
+                Provide your diagnosis in this exact format: ID: <number>, <diagnosis>. Do not include any additional information.""".strip()
         else:
             prompt = f"""\
-            Act as a professional medical doctor that can diagnose the patient based on the patient profile.
-            Provide your diagnosis in the following format: ID: <number>, <diagnosis>
-            
-            All possible diagnoses for you to choose from are as follows (one diagnosis per line, in the format of ID: <number>, <diagnosis>):
-            {option_text}
+                You are a professional medical doctor. Diagnose the patient based on the provided profile.
 
-            The following are some cases for reference.
-            
-            {shots}
-            
-            Now it's your turn.
-            
-            {text}
-            
-            Now, directly provide the diagnosis for the patient use the above format. Don't give me any additional information.""".strip()
+                Possible Diagnoses (select one, in the format ID: <number>, <diagnosis>):
+                {option_text}
+
+                Reference Cases for Your Review:
+                {shots}
+
+                Patient Profile:
+                {text}
+
+                Provide your diagnosis in this exact format: ID: <number>, <diagnosis>. Do not include any additional information.""".strip()
 
         return strip_all_lines(prompt)
     
@@ -166,7 +156,7 @@ class ClassificationAgent(Agent):
                 print(Fore.RED + f"Prediction {pred_text} not found in the label set. Randomly select one." + Style.RESET_ALL)
                 result = random.choice(list(label2desc.keys()))
         else:
-            if len(result) > 1:
+            if len(candidate) > 1:
                 print(Fore.YELLOW + f"Extracted numbers {candidate} is not exactly one. Select the first one." + Style.RESET_ALL)
                 result = candidate[0]
             else:
@@ -182,14 +172,11 @@ class ClassificationAgent(Agent):
         text: str
     ) -> str:
         option_text = '\n'.join([f"ID: {str(k)}, {v}" for k, v in label2desc.items()])
-        # ipdb.set_trace()
-        shots = self.rag.retrieve(query = text, top_k = self.rag.top_k) if (self.rag.insert_acc > 0) else []
+        shots = self.rag.retrieve(query = text, top_k = self.rag.top_k) if (self.rag.insert_acc > 25) else []
         if len(shots):
             prompt = self.get_prompt(text, option_text, shots)
         else:
             prompt = self.get_prompt(text, option_text)
-
-        # ipdb.set_trace()
 
         messages = [
             {"role": "user", "content": prompt}
@@ -389,7 +376,7 @@ if __name__ == "__main__":
     parser.add_argument('--output_path', type=str, default = None)
     parser.add_argument('--use_wandb', action = "store_true")
     parser.add_argument('--seed', type = int, default = 42)
-    parser.add_argument('--top_k', type = float, default = 5)
+    parser.add_argument('--top_k', type = int, default = 5)
     parser.add_argument('--top_p', type = float, default = 0.75)
     parser.add_argument('--description', type = str, default = None)
 
