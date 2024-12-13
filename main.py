@@ -385,7 +385,7 @@ class SQLGenerationAgent(Agent):
                 second_prompt = self.get_prompt(table_schema, user_query, sql_code)
             messages = [{"role": "user", "content": second_prompt}]
             response = self.generate_response(messages)
-            sql_code, value = self.clean_sql(response)
+            second_sql_code, value = self.clean_sql(response)
 
             ipdb.set_trace()
         
