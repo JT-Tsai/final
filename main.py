@@ -389,15 +389,17 @@ class SQLGenerationAgent(Agent):
         # Select final outputs
         final_prompt = second_prompt if second_prompt else prompt
         final_sql_code = second_sql_code if second_sql_code else sql_code
+        num_shots = len(shots) if shots else 0
 
         # Log information
         self.update_log_info(log_data={
             "num_input_tokens": len(self.tokenizer.encode(final_prompt)),
             "num_output_tokens": len(self.tokenizer.encode(response)),
-            "num_shots": len(shots) if shots else 0,
+            "num_shots": str(num_shots),
             "input_pred": final_prompt,
             "output_pred": final_sql_code,
         })
+        
 
         # Store inputs and outputs
         self.inputs.append((table_schema, user_query))
