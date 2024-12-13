@@ -379,6 +379,7 @@ class SQLGenerationAgent(Agent):
         second_prompt = None
         second_sql_code = None
         flag = False
+        shots = None
         if int(value) > 20:
             flag = True
             second_prompt = None
@@ -397,7 +398,7 @@ class SQLGenerationAgent(Agent):
             "num_input_tokens": len(self.tokenizer.encode(second_prompt if flag else prompt)),
             "num_output_tokens": len(self.tokenizer.encode(response)),
             "num_shots": str(len(shots) if flag else 0),
-            "input_pred": prompt,
+            "input_pred": second_prompt if flag else prompt,
             "output_pred": second_sql_code if flag else sql_code,
         })
         
