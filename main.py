@@ -324,15 +324,32 @@ class SQLGenerationAgent(Agent):
         prompt = f"""Query: {query}\nSQL: {sql}"""
         return strip_all_lines(prompt)
 
-    def clean_sql(self, sql: str) -> str:
-        """Clean and standardize SQL output"""
-        # Remove comments
-        sql = re.sub(r'--.*$', '', sql, flags=re.MULTILINE)
-        # Remove multiple spaces/newlines
-        sql = ' '.join(sql.split())
-        # Remove any non-SQL content
-        sql = re.sub(r'```sql|```', '', sql)
-        return sql.strip()
+    import re
+
+    def clean_sql(self, sql_output: str):
+        """
+        Clean and standardize SQL output, and extract difficulty level.
+        
+        Args:
+            sql_output (str): The raw output containing SQL code and difficulty.
+            
+        Returns:
+            tuple: A tuple containing the cleaned SQL code (str) and the difficulty (int).
+        """
+        # Extract Difficulty value
+        difficulty_match = re.search(r'Difficulty:\s*(\d+)', sql_output)
+        difficulty = int(difficulty_match.group(1)) if difficulty_match else None
+
+        # Extract SQL code
+        sql_match = re.search(r'```sql(.*?)```', sql_output, re.DOTALL)
+        sql_code = sql_match.group(1).strip() if sql_match else ""
+
+        # Clean SQL code
+        sql_code = re.sub(r'--.*$', '', sql_code, flags=re.MULTILINE)  # Remove comments
+        sql_code = ' '.join(sql_code.split())  # Remove multiple spaces/newlines
+
+        return sql_code, difficulty
+
 
     def __call__(self, table_schema: str, user_query: str) -> str:
         shots = self.rag.retrieve(query=user_query, top_k=self.rag.top_k) if (self.rag.insert_acc > 10) else []
