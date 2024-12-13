@@ -11,7 +11,7 @@ import torch
 import re
 import random
 
-# import ipdb
+import ipdb
 
 def get_bnb_config():
     """function for model quantization with int8 setting"""
@@ -358,7 +358,7 @@ class SQLGenerationAgent(Agent):
         messages = [{"role": "user", "content": prompt}]
         response = self.generate_response(messages)
         sql_code, value = self.clean_sql(response)
-        # ipdb.set_trace()
+        ipdb.set_trace()
         
         self.update_log_info(log_data={
             "num_input_tokens": len(self.tokenizer.encode(prompt)),
