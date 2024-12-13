@@ -300,7 +300,7 @@ class SQLGenerationAgent(Agent):
                 {query}
 
                 Write a valid SQL query that answers the user's question. Only provide the SQL code without any explanations.
-                And Give me a confidence score from 0 to 100.""".strip()
+                Provide me with a confidence score from 0 to 100 indicating how correct your code is.""".strip()
         
         else:
             prompt = f"""\
@@ -316,7 +316,7 @@ class SQLGenerationAgent(Agent):
                 {query}
 
                 Write a valid SQL query that answers the user's question. Only provide the SQL code without any explanations.
-                And Give me a confidence score from 0 to 100.""".strip()
+                Provide me with a confidence score from 0 to 100 indicating how correct your code is.""".strip()
             
         return strip_all_lines(prompt)
     
