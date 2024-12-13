@@ -354,7 +354,7 @@ class SQLGenerationAgent(Agent):
 
 
     def __call__(self, table_schema: str, user_query: str) -> str:
-        shots = self.rag.retrieve(query=user_query, top_k=self.rag.top_k) if (self.rag.insert_acc > 0) else []
+        shots = self.rag.retrieve(query=user_query, top_k=self.rag.top_k) if (self.rag.insert_acc > 10) else []
         prompt = self.get_prompt(table_schema, user_query)
 
         messages = [{"role": "user", "content": prompt}]
@@ -362,7 +362,7 @@ class SQLGenerationAgent(Agent):
         sql_code, value = self.clean_sql(response)
         ipdb.set_trace()
 
-        if int(value) > 20 and self.rag.insert_acc > 0:
+        if int(value) > 20 and self.rag.insert_acc > 10:
             prompt = self.get_prompt(table_schema, user_query, sql_code, shots)
             messages = [{"role": "user", "content": prompt}]
             response = self.generate_response(messages)
