@@ -357,8 +357,8 @@ class SQLGenerationAgent(Agent):
         
         messages = [{"role": "user", "content": prompt}]
         response = self.generate_response(messages)
+        sql_code, value = self.clean_sql(response)
         ipdb.set_trace()
-        sql_code = self.clean_sql(response)
         
         self.update_log_info(log_data={
             "num_input_tokens": len(self.tokenizer.encode(prompt)),
