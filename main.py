@@ -369,17 +369,20 @@ class SQLGenerationAgent(Agent):
 
 
     def __call__(self, table_schema: str, user_query: str) -> str:
-        shots = self.rag.retrieve(query=user_query, top_k=self.rag.top_k) if (self.rag.insert_acc > 10) else []
         prompt = self.get_prompt(table_schema, user_query)
 
         messages = [{"role": "user", "content": prompt}]
         response = self.generate_response(messages)
         sql_code, value = self.clean_sql(response)
-        ipdb.set_trace()
+        # ipdb.set_trace()
 
+        second_sql_code = None
+        flag = False
         if int(value) > 20:
+            flag = True
             second_prompt = None
             if self.rag.insert_acc > 10:
+                shots = self.rag.retrieve(query=user_query, top_k=self.rag.top_k)
                 second_prompt = self.get_prompt(table_schema, user_query, sql_code, shots)
             else:
                 second_prompt = self.get_prompt(table_schema, user_query, sql_code)
@@ -387,19 +390,19 @@ class SQLGenerationAgent(Agent):
             response = self.generate_response(messages)
             second_sql_code, value = self.clean_sql(response)
 
-            ipdb.set_trace()
+            # ipdb.set_trace()
         
         self.update_log_info(log_data={
             "num_input_tokens": len(self.tokenizer.encode(prompt)),
             "num_output_tokens": len(self.tokenizer.encode(response)),
             "num_shots": str(len(shots)),
             "input_pred": prompt,
-            "output_pred": sql_code,
+            "output_pred": second_sql_code if flag else sql_code,
         })
         
         self.inputs.append((table_schema, user_query))
-        self.model_outputs.append(sql_code)
-        return sql_code
+        self.model_outputs.append(second_sql_code if flag else sql_code)
+        return second_sql_code if flag else sql_code
 
     def update(self, correctness: bool) -> bool:
         if correctness:
