@@ -376,6 +376,7 @@ class SQLGenerationAgent(Agent):
         sql_code, value = self.clean_sql(response)
         # ipdb.set_trace()
 
+        second_prompt = None
         second_sql_code = None
         flag = False
         if int(value) > 20:
@@ -393,9 +394,9 @@ class SQLGenerationAgent(Agent):
             # ipdb.set_trace()
         
         self.update_log_info(log_data={
-            "num_input_tokens": len(self.tokenizer.encode(prompt)),
+            "num_input_tokens": len(self.tokenizer.encode(second_prompt if flag else prompt)),
             "num_output_tokens": len(self.tokenizer.encode(response)),
-            "num_shots": str(len(shots)),
+            "num_shots": str(len(shots) if flag else 0),
             "input_pred": prompt,
             "output_pred": second_sql_code if flag else sql_code,
         })
