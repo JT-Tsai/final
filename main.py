@@ -379,7 +379,7 @@ class SQLGenerationAgent(Agent):
         second_prompt, second_sql_code, shots = None, None, None
 
         # Check if a second prompt is needed
-        if int(value) > 20:
+        if value is not None and int(value) > 20:
             shots = self.rag.retrieve(query=user_query, top_k=self.rag.top_k) if self.rag.insert_acc > 10 else None
             second_prompt = self.get_prompt(table_schema, user_query, sql_code, shots)
             messages = [{"role": "user", "content": second_prompt}]
