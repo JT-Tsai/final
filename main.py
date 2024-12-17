@@ -176,7 +176,7 @@ class ClassificationAgent(Agent):
     ) -> str:
         option_text = '\n'.join([f"ID: {str(k)}, {v}" for k, v in label2desc.items()])
         shots = self.rag.retrieve(query = text, top_k = self.rag.top_k) if (self.rag.insert_acc > 10) else []
-        if shots is not None and len(shots):
+        if len(shots):
             prompt = self.get_prompt(text, option_text, shots)
         else:
             prompt = self.get_prompt(text, option_text)
@@ -191,7 +191,7 @@ class ClassificationAgent(Agent):
         self.update_log_info(log_data={
             "num_input_tokens": len(self.tokenizer.encode(prompt)),
             "num_output_tokens": len(self.tokenizer.encode(response)),
-            # "num_shots": str(len(shots)),
+            "num_shots": str(len(shots)),
             "input_pred": prompt,
             "output_pred": response,
         })
