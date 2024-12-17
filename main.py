@@ -204,8 +204,8 @@ class ClassificationAgent(Agent):
         if correctness:
             question = self.inputs[-1]
             answer = self.model_outputs[-1]
-            chunk = self.get_shot_template(question, answer)
-            self.rag.insert(key = question, value = chunk)
+            # chunk = self.get_shot_template(question, answer)
+            # self.rag.insert(key = question, value = chunk)
             return True
         else:
             return False
