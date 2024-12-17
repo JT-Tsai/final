@@ -136,7 +136,6 @@ class ClassificationAgent(Agent):
                 Patient Profile:
                 {text}
 
-                If you believe the answers in the reference cases do not relate to the current patient profile, select the most appropriate answer.
                 Provide your diagnosis in this exact format: ID: <number>, <diagnosis>. Do not include any additional information.""".strip()
 
         return strip_all_lines(prompt)
