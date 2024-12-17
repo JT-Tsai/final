@@ -68,15 +68,15 @@ class ClassificationAgent(Agent):
             )
 
         self.model.eval()
-        # rag_config = {
-        #     # I think we need to finetune embedding_model when we select the model to implement.
-        #     "embedding_model": config.get("embedding_model") \
-        #         if config.get("embedding_model") is not None else "BAAI/bge-base-en-v1.5",
-        #     "seed": config.get("seed") if config.get("seed") is not None else 42,
-        #     "top_k": config.get("top_k") if config.get("top_k") is not None else 5,
-        #     "order": config.get("order") if config.get("order") is not None else "similar_at_top",
-        # }
-        # self.rag = RAG(rag_config)
+        rag_config = {
+            # I think we need to finetune embedding_model when we select the model to implement.
+            "embedding_model": config.get("embedding_model") \
+                if config.get("embedding_model") is not None else "BAAI/bge-base-en-v1.5",
+            "seed": config.get("seed") if config.get("seed") is not None else 42,
+            "top_k": config.get("top_k") if config.get("top_k") is not None else 5,
+            "order": config.get("order") if config.get("order") is not None else "similar_at_top",
+        }
+        self.rag = RAG(rag_config)
 
         # gen max token
         self.max_token = config.get("max_token") if config.get("max_token") is not None else 32
@@ -136,6 +136,7 @@ class ClassificationAgent(Agent):
                 Patient Profile:
                 {text}
 
+                If you believe the answers in the reference cases do not relate to the current patient profile, select the most appropriate answer.
                 Provide your diagnosis in this exact format: ID: <number>, <diagnosis>. Do not include any additional information.""".strip()
 
         return strip_all_lines(prompt)
@@ -174,8 +175,7 @@ class ClassificationAgent(Agent):
         text: str
     ) -> str:
         option_text = '\n'.join([f"ID: {str(k)}, {v}" for k, v in label2desc.items()])
-        shots = None
-        # shots = self.rag.retrieve(query = text, top_k = self.rag.top_k) if (self.rag.insert_acc > 10) else []
+        shots = self.rag.retrieve(query = text, top_k = self.rag.top_k) if (self.rag.insert_acc > 10) else []
         if shots is not None and len(shots):
             prompt = self.get_prompt(text, option_text, shots)
         else:
@@ -204,8 +204,8 @@ class ClassificationAgent(Agent):
         if correctness:
             question = self.inputs[-1]
             answer = self.model_outputs[-1]
-            # chunk = self.get_shot_template(question, answer)
-            # self.rag.insert(key = question, value = chunk)
+            chunk = self.get_shot_template(question, answer)
+            self.rag.insert(key = question, value = chunk)
             return True
         else:
             return False
