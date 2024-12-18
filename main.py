@@ -111,34 +111,32 @@ class ClassificationAgent(Agent):
         
         return self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
     
-    def get_prompt(self, text, option_text, shots = None):
-        if shots is None:
-            prompt = f"""\
-                You are a professional medical doctor. Diagnose the patient based on the provided profile.
+    def get_prompt(self, text, option_text, shots=None):
+        base_prompt = (
+            "You are a highly experienced and detail-oriented medical doctor tasked with diagnosing a patient.\n\n"
+            "Carefully analyze the provided patient profile and the list of possible diagnoses.\n\n"
+            "Possible Diagnoses (select one in the exact format ID: <number>, <diagnosis>):\n"
+            f"{option_text}\n\n"
+        )
 
-                Patient Profile:
-                {text}
-
-                Possible Diagnoses (select one, in the format ID: <number>, <diagnosis>):
-                {option_text}
-
-                Provide your diagnosis in this exact format: ID: <number>, <diagnosis>. Do not include any additional information.""".strip()
+        if shots:
+            prompt = (
+                f"{base_prompt}"
+                "Review these reference cases as additional context to guide your diagnosis:\n"
+                f"{shots}\n\n"
+            )
         else:
-            prompt = f"""\
-                You are a professional medical doctor. Diagnose the patient based on the provided profile.
+            prompt = base_prompt
 
-                Possible Diagnoses (select one, in the format ID: <number>, <diagnosis>):
-                {option_text}
-
-                Reference Cases for Your Review:
-                {shots}
-
-                Patient Profile:
-                {text}
-
-                Provide your diagnosis in this exact format: ID: <number>, <diagnosis>. Do not include any additional information.""".strip()
+        prompt += (
+            "Patient Profile (analyze this carefully):\n"
+            f"{text}\n\n"
+            "Provide only your final diagnosis in this exact format: ID: <number>, <diagnosis>.\n"
+            "Ensure there is no additional information or explanation."
+        )
 
         return strip_all_lines(prompt)
+
     
     def get_shot_template(self, question, answer) -> str:
         prompt = f"""profile content: {question}, Answer: {answer}"""
