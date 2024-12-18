@@ -111,33 +111,35 @@ class ClassificationAgent(Agent):
         
         return self.tokenizer.batch_decode(generated_ids, skip_special_tokens=True)[0]
     
-    def get_prompt(self, text, option_text, shots=None):
-        base_prompt = (
-            "You are an expert medical doctor specializing in accurate and concise diagnoses.\n\n"
-            "Analyze the following patient profile and select the most likely diagnosis from the list provided.\n\n"
-            "Possible Diagnoses (use the exact format ID: <number>, <diagnosis>):\n"
-            f"{option_text}\n\n"
-        )
+    def get_prompt(self, text, option_text, shots = None):
+        if shots is None:
+            prompt = f"""\
+                You are a professional medical doctor. Diagnose the patient based on the provided profile.
 
-        if shots:
-            prompt = (
-                f"{base_prompt}"
-                "Here are reference cases that provide context for similar conditions:\n"
-                f"{shots}\n\n"
-            )
+                Patient Profile:
+                {text}
+
+                Possible Diagnoses (select one, in the format ID: <number>, <diagnosis>):
+                {option_text}
+
+                Provide your diagnosis in this exact format: ID: <number>, <diagnosis>. Do not include any additional information.""".strip()
         else:
-            prompt = base_prompt
+            prompt = f"""\
+                You are a professional medical doctor. Diagnose the patient based on the provided profile.
 
-        prompt += (
-            "Patient Profile:\n"
-            f"{text}\n\n"
-            "Output your diagnosis strictly in this format: ID: <number>, <diagnosis>.\n"
-            "No explanations, additional details, or alternative suggestions are allowed."
-        )
+                Possible Diagnoses (select one, in the format ID: <number>, <diagnosis>):
+                {option_text}
+
+                Reference Cases for Your Review:
+                {shots}
+
+                Patient Profile:
+                {text}
+                
+                Select the most appropriate answer if the reference cases do not align with the current patient profile.
+                Provide your diagnosis in this exact format: ID: <number>, <diagnosis>. Do not include any additional information.""".strip()
 
         return strip_all_lines(prompt)
-
-
     
     def get_shot_template(self, question, answer) -> str:
         prompt = f"""profile content: {question}, Answer: {answer}"""
