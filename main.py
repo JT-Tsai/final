@@ -113,29 +113,30 @@ class ClassificationAgent(Agent):
     
     def get_prompt(self, text, option_text, shots=None):
         base_prompt = (
-            "You are a highly experienced and detail-oriented medical doctor tasked with diagnosing a patient.\n\n"
-            "Carefully analyze the provided patient profile and the list of possible diagnoses.\n\n"
-            "Possible Diagnoses (select one in the exact format ID: <number>, <diagnosis>):\n"
+            "You are an expert medical doctor specializing in accurate and concise diagnoses.\n\n"
+            "Analyze the following patient profile and select the most likely diagnosis from the list provided.\n\n"
+            "Possible Diagnoses (use the exact format ID: <number>, <diagnosis>):\n"
             f"{option_text}\n\n"
         )
 
         if shots:
             prompt = (
                 f"{base_prompt}"
-                "Review these reference cases as additional context to guide your diagnosis:\n"
+                "Here are reference cases that provide context for similar conditions:\n"
                 f"{shots}\n\n"
             )
         else:
             prompt = base_prompt
 
         prompt += (
-            "Patient Profile (analyze this carefully):\n"
+            "Patient Profile:\n"
             f"{text}\n\n"
-            "Provide only your final diagnosis in this exact format: ID: <number>, <diagnosis>.\n"
-            "Ensure there is no additional information or explanation."
+            "Output your diagnosis strictly in this format: ID: <number>, <diagnosis>.\n"
+            "No explanations, additional details, or alternative suggestions are allowed."
         )
 
         return strip_all_lines(prompt)
+
 
     
     def get_shot_template(self, question, answer) -> str:
